@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "halo-word",
+    "name": "?��?練�?",
     "slug": "halo-word",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./Vocab.png",
     "scheme": "haloword",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -12,8 +12,10 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 2,
+      "package": "com.truechitest.haloword",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./Vocab.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true
@@ -33,10 +35,18 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "react-native-edge-to-edge"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a3289676-1d98-42d6-9300-fd44789d7c8f"
+      }
+    },
+    "owner": "truechitest"
   }
 }

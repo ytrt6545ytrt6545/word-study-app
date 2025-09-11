@@ -1,110 +1,136 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { loadWords, saveWords, Word } from "../../utils/storage";
+import { aiCompleteWord } from "@/utils/ai";
+import { useTabMark } from "@/context/TabMarkContext";
+import * as Speech from "expo-speech";
+import { getSpeechOptions } from "@/utils/tts";
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+export default function Explore() {
+  const router = useRouter();
+  const { setMarkedTab } = useTabMark();
+  const [en, setEn] = useState("");
+  const [zh, setZh] = useState("");
+  const [exEn, setExEn] = useState("");
+  const [exZh, setExZh] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [zhHeight, setZhHeight] = useState(40);
+  const [exEnHeight, setExEnHeight] = useState(40);
+  const [exZhHeight, setExZhHeight] = useState(40);
 
-export default function TabTwoScreen() {
+  const addWord = async () => {
+    const _en = en.trim(), _zh = zh.trim();
+    const _exEn = exEn.trim(), _exZh = exZh.trim();
+    if (!_en || !_zh) return;
+    const list = await loadWords();
+    if (list.some(w => w.en.toLowerCase() === _en.toLowerCase())) {
+      Alert.alert("重複了", `${_en} 已在清單`);
+      return;
+    }
+    const next: Word[] = [...list, { en: _en, zh: _zh, exampleEn: _exEn, exampleZh: _exZh, status: "unknown", createdAt: new Date().toISOString(), reviewCount: 0 }];
+    await saveWords(next);
+    setEn(""); setZh(""); setExEn(""); setExZh("");
+    setTimeout(() => { setMarkedTab(null); router.push('/(tabs)/words'); }, 0);
+    Alert.alert("已新增", `${_en} 已加入清單`);
+  };
+
+  const onAIFill = async () => {
+    const _en = en.trim();
+    const _zh = zh.trim();
+    const onlyEn = !!_en && !_zh;
+    const onlyZh = !!_zh && !_en;
+    if (!onlyEn && !onlyZh) {
+      Alert.alert("AI補齊", "請只填「英文單字」或「中文翻譯」其一");
+      return;
+    }
+    try {
+      setAiLoading(true);
+      const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
+      // 強制更新：只要有回傳就覆寫
+      if (res.en !== undefined) setEn(res.en || "");
+      if (res.zh !== undefined) setZh(res.zh || "");
+      if (res.exampleEn !== undefined) setExEn(res.exampleEn || "");
+      if (res.exampleZh !== undefined) setExZh(res.exampleZh || "");
+
+      // 念一次英文單字（以回傳為主，否則用原輸入）
+      const speakText = (res.en || _en || "").toString();
+      if (speakText) {
+        try { Speech.stop(); } catch {}
+        const opts = await getSpeechOptions('en-US');
+        Speech.speak(speakText, { language: 'en-US', voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
+      }
+    } catch (e: any) {
+      Alert.alert("AI 失敗", e?.message ?? "請稍後再試");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+    <View style={styles.container}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
+        <Text style={styles.title}>{"新增單字"}</Text>
+        <TextInput style={styles.input}
+          placeholder={"英文單字"}
+          value={en}
+          onChangeText={setEn}
+          autoCapitalize="none"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+        <TextInput style={[styles.input, styles.inputMultiline, { height: zhHeight }]}
+          placeholder={"英文單字中文翻譯"}
+          value={zh}
+          onChangeText={setZh}
+          multiline
+          scrollEnabled={false}
+          onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+        />
+        {/* Hidden measurer to auto-fit height when content is set by AI */}
+        <Text
+          style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]}
+          onLayout={(e) => setExEnHeight(Math.max(40, e.nativeEvent.layout.height))}
+        >
+          {exEn || " "}
+        </Text>
+        <TextInput style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
+          placeholder={"英文例句"}
+          value={exEn}
+          onChangeText={setExEn}
+          multiline
+          scrollEnabled={false}
+          onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+        />
+        {/* Hidden measurer to auto-fit height when content is set by AI */}
+        <Text
+          style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]}
+          onLayout={(e) => setExZhHeight(Math.max(40, e.nativeEvent.layout.height))}
+        >
+          {exZh || " "}
+        </Text>
+        <TextInput style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
+          placeholder={"英文例句中文翻譯"}
+          value={exZh}
+          onChangeText={setExZh}
+          multiline
+          scrollEnabled={false}
+          onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+        />
+        <View style={styles.rowButtons}>
+          <Button title={aiLoading ? "AI補齊中..." : "AI補齊"} onPress={onAIFill} disabled={aiLoading} />
+          {aiLoading && <ActivityIndicator style={{ marginLeft: 8 }} />}
+        </View>
+        <Button title={"加入清單"} onPress={addWord} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
+  subtitle: { fontSize: 20, marginTop: 16, marginBottom: 8, fontWeight: "bold" },
+  input: { borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, marginBottom: 8, backgroundColor: "#fff", width: "100%" },
+  inputMultiline: { textAlignVertical: "top" as const },
+  rowButtons: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  hiddenMeasure: { position: 'absolute', opacity: 0, zIndex: -1, left: 0, right: 0, includeFontPadding: true },
 });
