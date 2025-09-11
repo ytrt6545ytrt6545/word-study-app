@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "?��?練�?",
+    "name": "Halo Word",
     "slug": "halo-word",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "appName": "Halo Word",
       "versionCode": 2,
       "package": "com.truechitest.haloword",
       "adaptiveIcon": {
