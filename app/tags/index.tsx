@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, StyleSheet, Text, TextInput, View, ScrollView, Alert, Pressable } from "react-native";
-import { useRouter } from "expo-router";
 import { addTag, loadTags, removeTag, removeTags, renameTag, REVIEW_TAG } from "@/utils/storage";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function TagsManage() {
   const router = useRouter();
@@ -28,10 +28,14 @@ export default function TagsManage() {
   };
 
   const onDelete = async (t: string) => {
-    Alert.alert("刪除標籤", `確定刪除「${t}」？\n所有單字上的此標籤將一併移除。`, [
-      { text: "取消" },
-      { text: "刪除", style: "destructive", onPress: async () => { await removeTag(t); await refresh(); } },
-    ]);
+    Alert.alert(
+      "刪除標籤",
+      `確定要刪除「${t}」這個標籤嗎？\n刪除後無法復原。`,
+      [
+        { text: "取消" },
+        { text: "刪除", style: "destructive", onPress: async () => { await removeTag(t); await refresh(); } },
+      ]
+    );
   };
 
   const onToggleSelect = (t: string) => {
@@ -44,10 +48,14 @@ export default function TagsManage() {
   const onBulkDelete = async () => {
     const list = Array.from(selected);
     if (list.length === 0) return;
-    Alert.alert("批次刪除", `確定刪除 ${list.length} 個標籤？\n所有單字上的這些標籤將一併移除。`, [
-      { text: "取消" },
-      { text: "刪除", style: "destructive", onPress: async () => { await removeTags(list); setSelected(new Set()); await refresh(); } },
-    ]);
+    Alert.alert(
+      "批次刪除標籤",
+      `確定要刪除 ${list.length} 個標籤嗎？\n刪除後無法復原。`,
+      [
+        { text: "取消" },
+        { text: "刪除", style: "destructive", onPress: async () => { await removeTags(list); setSelected(new Set()); await refresh(); } },
+      ]
+    );
   };
 
   const startRename = (t: string) => { setRenaming(t); setRenameText(t); };
@@ -107,15 +115,15 @@ export default function TagsManage() {
               </Pressable>
               {isRenaming ? (
                 <>
-                  <TextInput style={[styles.input, { flex: 0, width: 140, marginRight: 6 }]} value={renameText} onChangeText={setRenameText} placeholder="新名稱" />
-                  <Button title="儲存" onPress={confirmRename} />
+                  <TextInput style={[styles.input, { flex: 0, width: 140, marginRight: 6 }]} value={renameText} onChangeText={setRenameText} placeholder="輸入新名稱" />
+                  <Button title="確認" onPress={confirmRename} />
                   <View style={{ width: 6 }} />
                   <Button title="取消" onPress={cancelRename} />
                 </>
               ) : (
                 <>
                   <View style={{ marginRight: 6 }}>
-                    <Button title={t + (t === REVIEW_TAG ? " (系統)" : "")} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} />
+                    <Button title={t + (t === REVIEW_TAG ? " (內建)" : "")} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} />
                   </View>
                   {t !== REVIEW_TAG && <Button title="改名" onPress={() => startRename(t)} />}
                   <View style={{ width: 6 }} />
@@ -125,7 +133,7 @@ export default function TagsManage() {
             </View>
           );
         })}
-        {tags.length === 0 && <Text style={styles.hint}>尚無標籤，請先新增</Text>}
+        {tags.length === 0 && <Text style={styles.hint}>目前沒有標籤，請新增。</Text>}
       </View>
     </ScrollView>
   );
@@ -146,3 +154,4 @@ const styles = StyleSheet.create({
   chkMark: { color: '#fff', fontWeight: 'bold' },
   hint: { color: '#777' },
 });
+

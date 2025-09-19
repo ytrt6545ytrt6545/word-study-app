@@ -3,6 +3,8 @@ import { defaultSrs, SrsState, updateSrs } from "./srs";
 
 // System-reserved tag for review flow
 export const REVIEW_TAG = "複習";
+// Legacy corrupted values to migrate from
+const LEGACY_REVIEW_TAGS = new Set(["複�?"]);
 
 export type WordStatus = "unknown" | "learning" | "mastered";
 export type Word = {
@@ -27,6 +29,7 @@ export type Word = {
 const STORAGE_KEY = "@halo_words";
 const TAGS_KEY = "@halo_tags";
 const SRS_LIMITS_KEY = "@srs_limits";
+const PREF_WORD_FONT_SIZE_KEY = "@pref_word_font_size";
 
 export async function loadWords(): Promise<Word[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -44,16 +47,19 @@ export async function loadWords(): Promise<Word[]> {
   // Migration: ensure createdAt and reviewCount exist
   const migrated = parsed.map((w) => {
     const rawTags = Array.isArray((w as any).tags) ? (w as any).tags : [];
-    const tags = Array.from(new Set(
-      rawTags
-        .filter((t) => typeof t === 'string')
-        .map((t) => t.trim())
-        .filter(Boolean)
-    ));
+    // Normalize and migrate corrupted review tag strings
+    const tagsSet = new Set<string>();
+    for (const t of rawTags) {
+      if (typeof t !== 'string') continue;
+      const name = (t || '').trim();
+      if (!name) continue;
+      tagsSet.add(LEGACY_REVIEW_TAGS.has(name) ? REVIEW_TAG : name);
+    }
+    const tags = Array.from(tagsSet);
     const base: Word = {
       ...w,
-      createdAt: w.createdAt || nowIso,
-      reviewCount: typeof w.reviewCount === 'number' ? w.reviewCount : 0,
+      createdAt: (w as any).createdAt || nowIso,
+      reviewCount: typeof (w as any).reviewCount === 'number' ? (w as any).reviewCount : 0,
       tags,
     } as Word;
     // Ensure SRS defaults
@@ -76,8 +82,8 @@ export async function loadWords(): Promise<Word[]> {
 }
 
 /**
- * 增加一次複習次數（含防重複時間窗）。
- * - windowMs 內重複觸發不累加。
+ * 增加一次複習次數（避免短窗重複計數）
+ * - windowMs 可防止重複觸發累計
  */
 export async function bumpReview(en: string, windowMs = 120_000): Promise<Word | null> {
   const list = await loadWords();
@@ -124,7 +130,11 @@ export async function loadTags(): Promise<string[]> {
     const arr = JSON.parse(raw);
     if (Array.isArray(arr)) {
       const set = new Set(
-        arr.filter((t) => typeof t === 'string').map((t) => t.trim()).filter(Boolean)
+        arr
+          .filter((t: any) => typeof t === 'string')
+          .map((t: string) => (t || '').trim())
+          .filter(Boolean)
+          .map((t: string) => (LEGACY_REVIEW_TAGS.has(t) ? REVIEW_TAG : t))
       );
       // Ensure system tag always exists in registry
       set.add(REVIEW_TAG);
@@ -385,3 +395,23 @@ export async function saveSrsLimits(limits: Partial<SrsLimits>): Promise<SrsLimi
   await AsyncStorage.setItem(SRS_LIMITS_KEY, JSON.stringify(next));
   return next;
 }
+
+// ---------- UI preferences ----------
+export async function getWordFontSize(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(PREF_WORD_FONT_SIZE_KEY);
+    if (!raw) return 18;
+    const n = Number(raw);
+    if (isNaN(n)) return 18;
+    return Math.max(12, Math.min(48, Math.round(n)));
+  } catch {
+    return 18;
+  }
+}
+
+export async function saveWordFontSize(size: number): Promise<number> {
+  const n = Math.max(12, Math.min(48, Math.round(Number(size) || 18)));
+  await AsyncStorage.setItem(PREF_WORD_FONT_SIZE_KEY, String(n));
+  return n;
+}
+

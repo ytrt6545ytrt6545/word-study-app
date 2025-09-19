@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { loadSpeechSettings, listVoices, TtsVoice, loadVoiceSelection, saveVoiceForLang, saveRatePercent, getSpeechOptions, loadZhRate, saveZhRate, loadPitchPercent, savePitchPercent } from "@/utils/tts";
+﻿import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { loadSpeechSettings, saveGender, listVoices, TtsVoice, VoiceGender, loadVoiceSelection, saveVoiceForLang, saveRatePercent, getSpeechOptions, loadZhRate, saveZhRate } from "../../utils/tts";
 import * as Speech from "expo-speech";
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Picker } from '@react-native-picker/picker';
@@ -9,7 +9,7 @@ import { getSrsLimits, saveSrsLimits, getWordFontSize, saveWordFontSize } from "
 
 export default function Settings() {
   const [ratePercent, setRatePercent] = useState<number>(50);
-  const [pitchPercent, setPitchPercent] = useState<number>(50);
+  const [gender, setGender] = useState<VoiceGender>("female");
   const [voices, setVoices] = useState<TtsVoice[]>([]);
   const [voiceEn, setVoiceEn] = useState<string | null>(null);
   const [voiceZh, setVoiceZh] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export default function Settings() {
       try {
         const s = await loadSpeechSettings();
         setRatePercent(s.ratePercent);
-        setPitchPercent(await loadPitchPercent());
+        setGender(s.gender);
         const vs = await listVoices();
         setVoices(vs);
         const sel = await loadVoiceSelection();
@@ -33,23 +33,23 @@ export default function Settings() {
         const limits = await getSrsLimits();
         setDailyNewLimit(limits.dailyNewLimit);
         setDailyReviewLimit(limits.dailyReviewLimit);
+        // UI prefs
         setWordFontSize(await getWordFontSize());
         setZhRate(await loadZhRate());
-      } finally {
-        setLoadingVoices(false);
-      }
+      } catch {}
+      finally { setLoadingVoices(false); }
     })();
   }, []);
 
   const enVoices = useMemo(() => voices.filter(v => (v.language || '').toLowerCase().startsWith('en')), [voices]);
   const zhVoices = useMemo(() => voices.filter(v => (v.language || '').toLowerCase().startsWith('zh')), [voices]);
   const currentEnName = useMemo(() => {
-    if (!voiceEn) return '系統預設';
+    if (!voiceEn) return '蝟餌絞?身';
     const v = enVoices.find(v => v.identifier === voiceEn);
     return (v?.name || v?.identifier || voiceEn);
   }, [voiceEn, enVoices]);
   const currentZhName = useMemo(() => {
-    if (!voiceZh) return '系統預設';
+    if (!voiceZh) return '蝟餌絞?身';
     const v = zhVoices.find(v => v.identifier === voiceZh);
     return (v?.name || v?.identifier || voiceZh);
   }, [voiceZh, zhVoices]);
@@ -58,15 +58,18 @@ export default function Settings() {
     setRatePercent(value);
     await saveRatePercent(value);
   };
-  const onCommitPitch = async (value: number) => {
-    const v = Math.round(value);
-    setPitchPercent(v);
-    await savePitchPercent(v);
+
+  const onSetGender = async (g: VoiceGender) => {
+    setGender(g);
+    await saveGender(g);
+    Alert.alert("撌脫??, "隤?脰撌脫??);
   };
+
   const onPickVoice = async (lang: 'en' | 'zh', id: string | null) => {
     if (lang === 'en') setVoiceEn(id); else setVoiceZh(id);
     await saveVoiceForLang(lang, id);
   };
+
   const onCommitNewLimit = async (value: number) => {
     const v = Math.round(value);
     setDailyNewLimit(v);
@@ -77,19 +80,22 @@ export default function Settings() {
     setDailyReviewLimit(v);
     await saveSrsLimits({ dailyReviewLimit: v });
   };
+
   const onCommitWordFont = async (value: number) => {
     const n = Math.round(value);
     setWordFontSize(n);
     await saveWordFontSize(n);
   };
+
   const onSetZhRate = async (m: number) => {
     const next = await saveZhRate(m);
     setZhRate(next);
-    // 直接套用，不需按確認
+    Alert.alert('撌脫??, `銝剜?隤?${next}X`);
   };
+
   const onPreviewVoice = async (lang: 'en' | 'zh') => {
     try { Speech.stop(); } catch {}
-    const text = lang === 'en' ? 'take an example' : '這是一個範例';
+    const text = lang === 'en' ? 'take a example' : '\u8209\u500b\u4f8b\u5b50';
     const langCode = lang === 'en' ? 'en-US' : 'zh-TW';
     const opts = await getSpeechOptions(langCode);
     Speech.speak(text, { language: langCode, voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
@@ -98,84 +104,116 @@ export default function Settings() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={styles.title}>設置</Text>
+        <Text style={styles.title}>閮剔蔭</Text>
 
-        <Text style={styles.sectionTitle}>複習每日上限</Text>
+        <Text style={styles.sectionTitle}>銴?瘥銝?</Text>
         <View style={{ marginBottom: 12 }}>
-          <Text>{`新卡上限：${dailyNewLimit}`}</Text>
-          <Slider minimumValue={0} maximumValue={100} step={1} value={dailyNewLimit} onValueChange={setDailyNewLimit} onSlidingComplete={onCommitNewLimit} />
-          <Text>{`複習上限：${dailyReviewLimit}`}</Text>
-          <Slider minimumValue={0} maximumValue={1000} step={10} value={dailyReviewLimit} onValueChange={setDailyReviewLimit} onSlidingComplete={onCommitReviewLimit} />
+          <Text>{`?啣銝?嚗?{dailyNewLimit}`}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={dailyNewLimit}
+            onValueChange={setDailyNewLimit}
+            onSlidingComplete={onCommitNewLimit}
+          />
+          <Text>{`銴?銝?嚗?{dailyReviewLimit}`}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={1000}
+            step={10}
+            value={dailyReviewLimit}
+            onValueChange={setDailyReviewLimit}
+            onSlidingComplete={onCommitReviewLimit}
+          />
         </View>
 
-        <Text style={styles.sectionTitle}>語速與音調</Text>
+        <Text style={styles.sectionTitle}>隤??梯?嚗?/Text>
         <View style={{ marginBottom: 4 }}>
-          <Slider minimumValue={0} maximumValue={100} step={1} value={ratePercent} onValueChange={setRatePercent} onSlidingComplete={onCommitRate} />
-          <Text style={styles.dim}>{`英文語速：${ratePercent}/100（中文語速見下方）`}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={ratePercent}
+            onValueChange={setRatePercent}
+            onSlidingComplete={onCommitRate}
+          />
+          <Text style={styles.dim}>{`?梯?隤?${ratePercent}/100嚗葉????銝閮剖?嚗}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>中文語速</Text>
+        <Text style={styles.sectionTitle}>銝剜?隤?/Text>
         <View style={styles.row}>
-          {[1, 1.15, 1.25, 1.35, 1.45].map((m) => (
+          {[1, 1.5, 2, 2.5, 3].map((m) => (
             <View key={m} style={{ marginRight: 6 }}>
-              <Button title={`${zhRate === m ? '✓ ' : ''}${m}X`} onPress={() => onSetZhRate(m)} />
+              <Button title={`${zhRate === m ? '?? : ''}${m}X`} onPress={() => onSetZhRate(m)} />
             </View>
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>音調（越左越低、越右越高）</Text>
+        <Text style={styles.sectionTitle}>?桀?憭批?嚗??株??</Text>
         <View style={{ marginBottom: 8 }}>
-          <Slider minimumValue={0} maximumValue={100} step={1} value={pitchPercent} onValueChange={setPitchPercent} onSlidingComplete={onCommitPitch} />
-          <Text style={styles.dim}>{`音調：${pitchPercent}/100`}</Text>
+          <Text>{`?桀?嚗?{wordFontSize}px`}</Text>
+          <Slider
+            minimumValue={12}
+            maximumValue={48}
+            step={1}
+            value={wordFontSize}
+            onValueChange={setWordFontSize}
+            onSlidingComplete={onCommitWordFont}
+          />
         </View>
 
-        <Text style={styles.sectionTitle}>單字字體大小（列表英文）</Text>
-        <View style={{ marginBottom: 8 }}>
-          <Text>{`目前：${wordFontSize}px`}</Text>
-          <Slider minimumValue={12} maximumValue={48} step={1} value={wordFontSize} onValueChange={setWordFontSize} onSlidingComplete={onCommitWordFont} />
+        <Text style={styles.sectionTitle}>隤嚗嚗戊嚗?/Text>
+        <View style={styles.row}>
+          <Button title={`${gender === 'male' ? '?? : ''}?瑁`} onPress={() => onSetGender('male')} />
+          <Button title={`${gender === 'female' ? '?? : ''}憟唾`} onPress={() => onSetGender('female')} />
         </View>
 
-        <Text style={styles.sectionTitle}>英文語音清單</Text>
+        <Text style={styles.sectionTitle}>?梯?隤皜</Text>
         {loadingVoices ? (
-          <Text style={styles.dim}>載入可用語音中...</Text>
+          <Text style={styles.dim}>頛?舐隤銝凌?/Text>
         ) : (
           <View style={styles.voiceList}>
             <View style={{ flex: 1 }}>
-              <Picker selectedValue={voiceEn ?? ''} onValueChange={(val) => onPickVoice('en', val === '' ? null : String(val))}>
-                <Picker.Item label="系統預設" value="" />
+              <Picker
+                selectedValue={voiceEn ?? ''}
+                onValueChange={(val) => onPickVoice('en', val === '' ? null : String(val))}
+              >
+                <Picker.Item label="蝟餌絞?身" value="" />
                 {enVoices.map(v => (
                   <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
                 ))}
               </Picker>
+              {enVoices.length === 0 && <Text style={styles.dim}>撠?舐?梯?隤</Text>}
             </View>
-            <View style={styles.voiceRow}>
-              <Text style={styles.voiceName} numberOfLines={1}>{currentEnName}</Text>
-              <Pressable onPress={() => onPreviewVoice('en')} accessibilityLabel="試聽英文語音" style={{ paddingHorizontal: 6 }}>
-                <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
-              </Pressable>
-            </View>
+            <Text style={styles.voiceName} numberOfLines={1}>{currentEnName}</Text>
+            <Pressable onPress={() => onPreviewVoice('en')} accessibilityLabel="閰西?梯?隤" style={{ paddingHorizontal: 6 }}>
+              <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
+            </Pressable>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>中文語音清單</Text>
+        <Text style={styles.sectionTitle}>銝剜?隤皜</Text>
         {loadingVoices ? (
-          <Text style={styles.dim}>載入可用語音中...</Text>
+          <Text style={styles.dim}>頛?舐隤銝凌?/Text>
         ) : (
           <View style={styles.voiceList}>
             <View style={{ flex: 1 }}>
-              <Picker selectedValue={voiceZh ?? ''} onValueChange={(val) => onPickVoice('zh', val === '' ? null : String(val))}>
-                <Picker.Item label="系統預設" value="" />
+              <Picker
+                selectedValue={voiceZh ?? ''}
+                onValueChange={(val) => onPickVoice('zh', val === '' ? null : String(val))}
+              >
+                <Picker.Item label="蝟餌絞?身" value="" />
                 {zhVoices.map(v => (
                   <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
                 ))}
               </Picker>
+              {zhVoices.length === 0 && <Text style={styles.dim}>撠?舐銝剜?隤</Text>}
             </View>
-            <View style={styles.voiceRow}>
-              <Text style={styles.voiceName} numberOfLines={1}>{currentZhName}</Text>
-              <Pressable onPress={() => onPreviewVoice('zh')} accessibilityLabel="試聽中文語音" style={{ paddingHorizontal: 6 }}>
-                <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
-              </Pressable>
-            </View>
+            <Text style={styles.voiceName} numberOfLines={1}>{currentZhName}</Text>
+            <Pressable onPress={() => onPreviewVoice('zh')} accessibilityLabel="閰西銝剜?隤" style={{ paddingHorizontal: 6 }}>
+              <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -188,9 +226,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
   row: { flexDirection: 'row', gap: 10 },
-  voiceList: { marginBottom: 8 },
+  voiceList: { marginBottom: 4 },
   voiceRow: { flexDirection: 'row', alignItems: 'center' },
-  voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: '#333' },
+  voiceName: { maxWidth: 140, marginRight: 6, color: '#333' },
   dim: { color: '#666' },
 });
 

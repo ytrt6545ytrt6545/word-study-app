@@ -1,37 +1,26 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 
-// 舊版有離散等級；改為 0–100 百分比
-export type RateLevel = "normal" | "slow" | "slower"; // 保留型別以避免外部引用報錯
 export type VoiceGender = "male" | "female";
 export type TtsVoice = { identifier: string; name?: string; language?: string; quality?: number | string };
 
-const KEY_RATE_LEVEL = "@tts_rate_level"; // 舊版鍵名（相容用）
-const KEY_RATE_PERCENT = "@tts_rate_percent"; // 新版鍵名（0–100）
+const KEY_RATE_PERCENT = "@tts_rate_percent"; // 0-100 slider for EN
 const KEY_GENDER = "@tts_gender";
+const KEY_PITCH_PERCENT = "@tts_pitch_percent"; // 0-100 for pitch (left=male, right=female)
 const KEY_VOICE_EN = "@tts_voice_en";
 const KEY_VOICE_ZH = "@tts_voice_zh";
+const KEY_RATE_ZH = "@tts_rate_zh"; // zh rate multiplier (1.0 = normal)
 
-// 讀取語音設定：回傳 ratePercent（0–100）與性別
 export async function loadSpeechSettings(): Promise<{ ratePercent: number; gender: VoiceGender }> {
-  const [percentRaw, legacyRaw, genderRaw] = await Promise.all([
+  const [percentRaw, genderRaw] = await Promise.all([
     AsyncStorage.getItem(KEY_RATE_PERCENT),
-    AsyncStorage.getItem(KEY_RATE_LEVEL),
     AsyncStorage.getItem(KEY_GENDER),
   ]);
-
-  let ratePercent: number | null = null;
+  let ratePercent = 50;
   if (percentRaw != null) {
     const n = Number(percentRaw);
     if (!isNaN(n)) ratePercent = Math.max(0, Math.min(100, Math.round(n)));
   }
-  // 與舊版對映：normal=50、slow=40、slower=30（約略對應舊 1.0/0.8/0.6）
-  if (ratePercent == null) {
-    if (legacyRaw === "slow") ratePercent = 40;
-    else if (legacyRaw === "slower") ratePercent = 30;
-    else ratePercent = 50; // normal 或未設定
-  }
-
   const gender: VoiceGender = (genderRaw === "male" || genderRaw === "female") ? (genderRaw as VoiceGender) : "female";
   return { ratePercent, gender };
 }
@@ -45,7 +34,6 @@ export async function saveGender(gender: VoiceGender) {
   await AsyncStorage.setItem(KEY_GENDER, gender);
 }
 
-// 將 0–100 百分比映射到 expo-speech 的 rate。50 ≈ 1.0（正常）
 export function mapRateFromPercent(percent: number): number {
   const p = Math.max(0, Math.min(100, percent));
   // 0 => 0.5x, 50 => 1.0x, 100 => 1.5x
@@ -53,8 +41,30 @@ export function mapRateFromPercent(percent: number): number {
 }
 
 export function mapPitch(gender: VoiceGender): number {
-  // Use pitch to emulate lower (male) vs higher (female) voice
   return gender === "male" ? 0.9 : 1.1;
+}
+
+export function mapPitchFromPercent(percent: number): number {
+  const p = Math.max(0, Math.min(100, percent));
+  // 0 => 0.50（低音較男）；50 => 1.00；100 => 1.50（高音較女）
+  return 0.5 + (p / 100) * 1.0;
+}
+
+export async function loadPitchPercent(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(KEY_PITCH_PERCENT);
+    if (raw == null) return 50;
+    const n = Number(raw);
+    return isNaN(n) ? 50 : Math.max(0, Math.min(100, Math.round(n)));
+  } catch {
+    return 50;
+  }
+}
+
+export async function savePitchPercent(percent: number): Promise<number> {
+  const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 50)));
+  await AsyncStorage.setItem(KEY_PITCH_PERCENT, String(p));
+  return p;
 }
 
 export async function listVoices(): Promise<TtsVoice[]> {
@@ -82,12 +92,36 @@ export async function saveVoiceForLang(lang: 'en' | 'zh', identifier: string | n
   }
 }
 
+export async function loadZhRate(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(KEY_RATE_ZH);
+    if (!raw) return 1.0;
+    const n = Number(raw);
+    if (isNaN(n) || n <= 0) return 1.0;
+    return Math.max(0.5, Math.min(3.0, n));
+  } catch {
+    return 1.0;
+  }
+}
+
+export async function saveZhRate(multiplier: number): Promise<number> {
+  const m = Math.max(0.5, Math.min(3.0, Number(multiplier) || 1));
+  await AsyncStorage.setItem(KEY_RATE_ZH, String(m));
+  return m;
+}
+
 export async function getSpeechOptions(language?: string): Promise<{ language?: string; rate: number; pitch: number; voice?: string }> {
-  const { ratePercent, gender } = await loadSpeechSettings();
+  const { ratePercent } = await loadSpeechSettings();
   const { voiceEn, voiceZh } = await loadVoiceSelection();
   const isZh = !!language && language.toLowerCase().startsWith('zh');
   const voice = isZh ? voiceZh || undefined : voiceEn || undefined;
-  // 中文一律正常語速（1.0），英文依照拉桿百分比
-  const rate = isZh ? 1.0 : mapRateFromPercent(ratePercent);
-  return { language, rate, pitch: mapPitch(gender), voice };
+  const zhRate = await loadZhRate();
+  const rate = isZh ? zhRate : mapRateFromPercent(ratePercent);
+  const pitchPercent = await loadPitchPercent();
+  const pitch = mapPitchFromPercent(pitchPercent);
+  return { language, rate, pitch, voice };
 }
+
+
+
+

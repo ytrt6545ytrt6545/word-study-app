@@ -101,7 +101,7 @@ export default function WordDetail() {
     if (listening) return;
     try {
       setListening(true);
-      // 記錄一次複習（有時間窗防重複）
+      // 記�?一次�?習�??��??��??��?複�?
       await bumpReview(word.en);
       await refreshWordFromStorage();
       const en = word.en;
@@ -109,20 +109,16 @@ export default function WordDetail() {
       const exEnT = exampleEn.trim();
       const exZhT = exampleZh.trim();
 
-      // 英文單字 1 次
-      await speakOnce(en, "en-US");
-      // 英文單字中文翻譯 1 次（若有）
-      if (zhT) await speakOnce(zhT, "zh-TW");
-      // 英文單字 3 次（間隔 0.5 秒）
-      await repeatSpeak(en, 3, 0, "en-US");
-      // 英文例句 1 次（若有）
-      if (exEnT) await speakOnce(exEnT, "en-US");
-      // 英文例句中文翻譯 1 次（若有）
-      if (exZhT) await speakOnce(exZhT, "zh-TW");
-      // 英文例句 3 次（間隔 0.5 秒）
-      if (exEnT) await repeatSpeak(exEnT, 3, 0, "en-US");
+      // ?��??��? 1 �?      await speakOnce(en, "en-US");
+      // ?��??��?中�?翻譯 1 次�??��?�?      if (zhT) await speakOnce(zhT, "zh-TW");
+      // ?��??��? 3 次�??��? 0.5 秒�?
+      await repeatSpeak(en, 3, 500, "en-US");
+      // ?��?例句 1 次�??��?�?      if (exEnT) await speakOnce(exEnT, "en-US");
+      // ?��?例句中�?翻譯 1 次�??��?�?      if (exZhT) await speakOnce(exZhT, "zh-TW");
+      // ?��?例句 3 次�??��? 0.5 秒�?
+      if (exEnT) await repeatSpeak(exEnT, 3, 500, "en-US");
     } catch (e: any) {
-      Alert.alert("聽力播放失敗", e?.message ?? "請稍後再試");
+      Alert.alert("?��??�放失�?", e?.message ?? "請�?後�?�?);
     } finally {
       setListening(false);
     }
@@ -160,8 +156,8 @@ export default function WordDetail() {
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
       <Text style={styles.title}>{word.en}</Text>
       <View style={styles.metaRow}>
-        <Text style={styles.metaText}>{`新增：${formatYMD(word.createdAt)}`}</Text>
-        <Text style={styles.metaTextStrong}>{`複習：${(word.reviewCount || 0).toString()}`}</Text>
+        <Text style={styles.metaText}>{`?��?�?{formatYMD(word.createdAt)}`}</Text>
+        <Text style={styles.metaTextStrong}>{`複�?�?{(word.reviewCount || 0).toString()}`}</Text>
       </View>
 
       <Text style={styles.label}>{"\u4E2D\u6587\u7FFB\u8B6F"}</Text>
@@ -220,12 +216,12 @@ export default function WordDetail() {
               </Pressable>
             );
           })}
-          {tags.length === 0 && <Text style={styles.hint}>尚無標籤，請先到首頁新增</Text>}
+          {tags.length === 0 && <Text style={styles.hint}>尚無標籤，�??�到首�??��?</Text>}
         </View>
       )}
 
       <View style={styles.rowButtons}>
-        <Button title={listening ? "播放中..." : "聽力"} onPress={onListen} disabled={listening} />
+        <Button title={listening ? "?�放�?.." : "?��?"} onPress={onListen} disabled={listening} />
         <Button title={"\u5132\u5B58"} onPress={save} />
         <Button title={"\u522A\u9664"} color="#c62828" onPress={remove} />
       </View>
@@ -255,3 +251,4 @@ const styles = StyleSheet.create({
   dotYellow: { backgroundColor: "#ffb300" },
   dotGreen: { backgroundColor: "#43a047" },
 });
+
