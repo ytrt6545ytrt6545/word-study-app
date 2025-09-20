@@ -1,42 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Alert, Button, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Speech from 'expo-speech';
+import winkTokenizer from 'wink-tokenizer';
 
 import { aiCompleteWord, AIFillResult } from '@/utils/ai';
-import { loadWords, saveWords, toggleWordTag, REVIEW_TAG, Word } from '@/utils/storage';
+import { loadTags, loadWords, saveWords, REVIEW_TAG, Word } from '@/utils/storage';
+import { getSpeechOptions } from '@/utils/tts';
 
 type Token = { key: string; text: string; isWord: boolean };
 
-type DictionaryDefinition = { definition: string; example?: string; partOfSpeech?: string };
-type DictionaryResult = { phonetic?: string; audio?: string; definitions: DictionaryDefinition[] };
-type SessionMark = { saved?: boolean; review?: boolean };
+type SessionMark = { saved?: boolean };
+
+const tokenizerInstance = winkTokenizer() as { tokenize: (text: string) => { value: string; tag: string }[] };
 
 function tokenize(text: string): Token[] {
-  const tokens: Token[] = [];
-  if (!text) return tokens;
-  const wordRegex = /[A-Za-z][A-Za-z'-]*/g;
-  let lastIndex = 0;
+  if (!text) return [];
+  const raw = tokenizerInstance.tokenize(text) as { value: string; tag: string }[];
   let seq = 0;
-  let match: RegExpExecArray | null;
-  while ((match = wordRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      tokens.push({ key: 'gap-' + seq++, text: text.slice(lastIndex, match.index), isWord: false });
-    }
-    tokens.push({ key: 'word-' + seq++, text: match[0], isWord: true });
-    lastIndex = wordRegex.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    tokens.push({ key: 'gap-' + seq++, text: text.slice(lastIndex), isWord: false });
-  }
-  return tokens;
+  return raw.map((token) => ({
+    key: `${token.tag}-${seq++}`,
+    text: token.value,
+    isWord: token.tag === 'word',
+  }));
 }
 
 function normalizeWord(text: string): string {
   return text.replace(/[^A-Za-z']+/g, '').toLowerCase();
 }
 
-async function fetchDictionaryEntry(word: string): Promise<DictionaryResult | null> {
+async function fetchPhonetic(word: string): Promise<string | null> {
   const target = word.trim().toLowerCase();
   if (!target) return null;
   const url = 'https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(target);
@@ -44,44 +37,28 @@ async function fetchDictionaryEntry(word: string): Promise<DictionaryResult | nu
   if (!res.ok) {
     if (res.status === 404) return null;
     const detail = await res.text().catch(() => '');
-    throw new Error('dictionary ' + res.status + ': ' + detail);
+    throw new Error('dictionary ' + res.status + (detail ? ': ' + detail : ''));
   }
   const json = await res.json();
   if (!Array.isArray(json) || json.length === 0) return null;
   const entry = json[0] ?? {};
-  const phonetic = typeof entry.phonetic === 'string' && entry.phonetic
-    ? entry.phonetic
-    : Array.isArray(entry.phonetics)
-      ? entry.phonetics.find((p: any) => p && typeof p.text === 'string' && p.text)?.text
-      : undefined;
-  const audio = Array.isArray(entry.phonetics)
-    ? entry.phonetics.find((p: any) => p && typeof p.audio === 'string' && p.audio)?.audio
-    : undefined;
-  const definitions: DictionaryDefinition[] = [];
-  if (Array.isArray(entry.meanings)) {
-    for (const meaning of entry.meanings) {
-      if (!meaning || !Array.isArray(meaning.definitions)) continue;
-      const part = typeof meaning.partOfSpeech === 'string' ? meaning.partOfSpeech : undefined;
-      for (const def of meaning.definitions) {
-        if (!def || typeof def.definition !== 'string') continue;
-        definitions.push({
-          definition: def.definition,
-          example: typeof def.example === 'string' ? def.example : undefined,
-          partOfSpeech: part,
-        });
+  if (typeof entry.phonetic === 'string' && entry.phonetic) return entry.phonetic;
+  if (Array.isArray(entry.phonetics)) {
+    for (const item of entry.phonetics) {
+      if (item && typeof item.text === 'string' && item.text) {
+        return item.text;
       }
     }
   }
-  return { phonetic: phonetic || undefined, audio: audio || undefined, definitions };
+  return null;
 }
 
 type LookupState = {
   word: string;
   normalized: string;
   loading: boolean;
-  localWord?: Word;
-  dictionary?: DictionaryResult;
-  dictionaryError?: string;
+  phonetic?: string;
+  phoneticError?: string;
   ai?: AIFillResult;
   aiError?: string;
   error?: string;
@@ -94,8 +71,51 @@ export default function ReadingScreen() {
   const [selectedWord, setSelectedWord] = useState<string>('');
   const [lookupState, setLookupState] = useState<LookupState | null>(null);
   const [sessionMarks, setSessionMarks] = useState<Record<string, SessionMark>>({});
+  const [availableTags, setAvailableTags] = useState<string[]>([REVIEW_TAG]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([REVIEW_TAG]);
+  const [showTagSelector, setShowTagSelector] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const tags = await loadTags();
+        if (cancelled) return;
+        const unique = Array.from(new Set([...(tags || []), REVIEW_TAG]));
+        setAvailableTags(unique);
+        setSelectedTags((prev) => {
+          const next = new Set(prev.length ? prev : []);
+          next.add(REVIEW_TAG);
+          return Array.from(next);
+        });
+      } catch {
+        // ignore tag loading errors and fall back to existing defaults
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const tokens = useMemo(() => tokenize(rawText), [rawText]);
+  const selectedTagsLabel = useMemo(() => selectedTags.join('、'), [selectedTags]);
+
+  const toggleDefaultTag = useCallback((tag: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (tag === REVIEW_TAG) {
+        next.add(REVIEW_TAG);
+        return Array.from(next);
+      }
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      next.add(REVIEW_TAG);
+      return Array.from(next);
+    });
+  }, []);
 
   const onPickFile = async () => {
     try {
@@ -135,38 +155,29 @@ export default function ReadingScreen() {
     setLookupState({ word: selectedWord, normalized, loading: true });
     (async () => {
       try {
-        const words = await loadWords();
-        if (cancelled) return;
-        const local = words.find((w) => normalizeWord(w.en) === normalized);
-        let dictionary: DictionaryResult | undefined;
-        let dictionaryError: string | undefined;
+        let phonetic: string | undefined;
+        let phoneticError: string | undefined;
         try {
-          const dict = await fetchDictionaryEntry(normalized);
-          dictionary = dict ?? undefined;
+          const result = await fetchPhonetic(normalized);
+          phonetic = result ?? undefined;
         } catch (err: any) {
-          dictionaryError = err?.message || 'dictionary error';
+          phoneticError = err?.message || 'dictionary error';
         }
         if (cancelled) return;
         let ai: AIFillResult | undefined;
         let aiError: string | undefined;
-        const hasLocalTranslation = !!(local && typeof local.zh === 'string' && local.zh.trim());
-        const dictionaryHasExample = !!(dictionary && dictionary.definitions.some((d) => !!d.example));
-        const needsAi = !hasLocalTranslation || !dictionaryHasExample;
-        if (needsAi) {
-          try {
-            ai = await aiCompleteWord({ en: normalized });
-          } catch (err: any) {
-            aiError = err?.message || 'AI error';
-          }
+        try {
+          ai = await aiCompleteWord({ en: normalized });
+        } catch (err: any) {
+          aiError = err?.message || 'AI error';
         }
         if (cancelled) return;
         setLookupState({
           word: selectedWord,
           normalized,
           loading: false,
-          localWord: local,
-          dictionary,
-          dictionaryError,
+          phonetic,
+          phoneticError,
           ai,
           aiError,
         });
@@ -180,21 +191,30 @@ export default function ReadingScreen() {
     };
   }, [selectedWord]);
 
-  const buildWordPayload = (baseWord: string): Word => {
+  const buildWordPayload = (baseWord: string, incomingTags: string[]): Word => {
     const trimmed = (baseWord || '').trim() || lookupState?.normalized || baseWord;
     const translation = (lookupState?.ai?.zh || '').trim();
-    const dictionaryExample = lookupState?.dictionary?.definitions.find((d) => !!d.example)?.example || '';
-    const exampleEn = lookupState?.ai?.exampleEn || dictionaryExample || '';
+    const exampleEn = lookupState?.ai?.exampleEn || '';
     const exampleZh = lookupState?.ai?.exampleZh || '';
+    const tagSet = new Set(incomingTags);
+    tagSet.add(REVIEW_TAG);
+    const tags = Array.from(tagSet);
+    const includesReview = tags.includes(REVIEW_TAG);
+    const nowIso = new Date().toISOString();
     return {
       en: trimmed,
       zh: translation,
       exampleEn,
       exampleZh,
       status: 'unknown',
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
       reviewCount: 0,
-      tags: [],
+      tags,
+      srsEase: includesReview ? 2.5 : undefined,
+      srsInterval: includesReview ? 0 : undefined,
+      srsReps: includesReview ? 0 : undefined,
+      srsLapses: includesReview ? 0 : undefined,
+      srsDue: includesReview ? nowIso : undefined,
     };
   };
 
@@ -202,52 +222,57 @@ export default function ReadingScreen() {
     if (!lookupState) return;
     const normalized = lookupState.normalized;
     try {
-      const list = await loadWords();
-      if (list.some((w) => normalizeWord(w.en) === normalized)) {
-        Alert.alert('\u5df2\u5728\u55ae\u5b57\u5eab', lookupState.word);
-        return;
-      }
       const baseWord = (lookupState.word || lookupState.normalized).trim();
-      const newWord = buildWordPayload(baseWord);
-      await saveWords([...list, newWord]);
-      setLookupState((prev) => (prev ? { ...prev, localWord: newWord } : prev));
-      setSessionMarks((prev) => ({ ...prev, [normalized]: { ...(prev[normalized] || {}), saved: true } }));
-      Alert.alert('\u5df2\u52a0\u5165\u55ae\u5b57', baseWord);
+      if (!baseWord) return;
+      const list = await loadWords();
+      const idx = list.findIndex((w) => normalizeWord(w.en) === normalized);
+      const defaultTags = Array.from(new Set([...selectedTags, REVIEW_TAG]));
+      const nowIso = new Date().toISOString();
+      const translation = (lookupState.ai?.zh || '').trim();
+      const exampleEn = lookupState.ai?.exampleEn || '';
+      const exampleZh = lookupState.ai?.exampleZh || '';
+      if (idx >= 0) {
+        const existing = list[idx];
+        const nextTags = new Set([...(existing.tags || []), ...defaultTags]);
+        const includesReview = nextTags.has(REVIEW_TAG);
+        const updated: Word = {
+          ...existing,
+          zh: existing.zh || translation,
+          exampleEn: existing.exampleEn || exampleEn,
+          exampleZh: existing.exampleZh || exampleZh,
+          tags: Array.from(nextTags),
+        };
+        if (includesReview && !(existing.tags || []).includes(REVIEW_TAG)) {
+          updated.srsEase = typeof existing.srsEase === 'number' ? existing.srsEase : 2.5;
+          updated.srsInterval = typeof existing.srsInterval === 'number' ? existing.srsInterval : 0;
+          updated.srsReps = typeof existing.srsReps === 'number' ? existing.srsReps : 0;
+          updated.srsLapses = typeof existing.srsLapses === 'number' ? existing.srsLapses : 0;
+          updated.srsDue = existing.srsDue || nowIso;
+        }
+        const nextList = [...list];
+        nextList[idx] = updated;
+        await saveWords(nextList);
+      } else {
+        const newWord = buildWordPayload(baseWord, defaultTags);
+        await saveWords([...list, newWord]);
+      }
+      setSessionMarks((prev) => ({ ...prev, [normalized]: { saved: true } }));
     } catch (err: any) {
       Alert.alert('\u64cd\u4f5c\u5931\u6557', err?.message || '\u7121\u6cd5\u52a0\u5165\u55ae\u5b57');
     }
   };
 
-  const handleAddReview = async () => {
-    if (!lookupState) return;
-    const normalized = lookupState.normalized;
-    try {
-      let list = await loadWords();
-      let target = list.find((w) => normalizeWord(w.en) === normalized);
-      if (!target) {
-        const baseWord = (lookupState.word || lookupState.normalized).trim();
-        const newWord = buildWordPayload(baseWord);
-        await saveWords([...list, newWord]);
-        list = await loadWords();
-        target = list.find((w) => normalizeWord(w.en) === normalized) || newWord;
-      }
-      await toggleWordTag(target.en, REVIEW_TAG, true);
-      const refreshed = await loadWords();
-      const updated = refreshed.find((w) => normalizeWord(w.en) === normalized) || target;
-      setLookupState((prev) => (prev ? { ...prev, localWord: updated } : prev));
-      setSessionMarks((prev) => ({ ...prev, [normalized]: { ...(prev[normalized] || {}), saved: true, review: true } }));
-      Alert.alert('\u5df2\u52a0\u5165\u8907\u7fd2', updated.en);
-    } catch (err: any) {
-      Alert.alert('\u64cd\u4f5c\u5931\u6557', err?.message || '\u7121\u6cd5\u52a0\u5165\u8907\u7fd2');
-    }
-  };
-
-  const handleSpeak = () => {
+  const handleSpeak = useCallback(async () => {
     const phrase = (lookupState?.word || selectedWord || '').trim();
     if (!phrase) return;
-    try { Speech.stop(); } catch (e) { /* ignore */ }
-    Speech.speak(phrase, { language: 'en-US' });
-  };
+    try { Speech.stop(); } catch { /* ignore */ }
+    try {
+      const options = await getSpeechOptions('en-US');
+      Speech.speak(phrase, { ...options, language: options.language || 'en-US' });
+    } catch {
+      Speech.speak(phrase, { language: 'en-US' });
+    }
+  }, [lookupState?.word, selectedWord]);
 
   const clearAll = () => {
     setRawText('');
@@ -265,8 +290,7 @@ export default function ReadingScreen() {
 
   const normalizedCurrent = lookupState?.normalized || '';
   const markState = normalizedCurrent ? sessionMarks[normalizedCurrent] : undefined;
-  const hasSavedWord = !!(lookupState?.localWord || markState?.saved);
-  const hasReviewTag = !!(lookupState?.localWord?.tags?.includes(REVIEW_TAG) || markState?.review);
+  const hasSavedWord = !!markState?.saved;
 
   return (
     <View style={styles.container}>
@@ -283,6 +307,43 @@ export default function ReadingScreen() {
           onChangeText={setRawText}
           multiline
         />
+        <View style={styles.tagSection}>
+          <Pressable style={styles.tagHeader} onPress={() => setShowTagSelector((prev) => !prev)}>
+            <Text style={styles.tagHeaderText}>{'\u9810\u8a2d\u6a19\u7c64'}</Text>
+            <Text style={styles.tagHeaderValue}>{selectedTagsLabel || '\uff08\u5c1a\u672a\u9078\u64c7\uff09'}</Text>
+          </Pressable>
+          {showTagSelector && (
+            <View style={styles.tagList}>
+              {availableTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag);
+                const isMandatory = tag === REVIEW_TAG;
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[
+                      styles.tagChip,
+                      isSelected && styles.tagChipSelected,
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => toggleDefaultTag(tag)}
+                    disabled={isMandatory}
+                  >
+                    <Text
+                      style={[
+                        styles.tagChipText,
+                        isSelected && styles.tagChipTextSelected,
+                        isMandatory && styles.tagChipTextDisabled,
+                      ]}
+                    >
+                      {isMandatory ? `${tag}（必選）` : tag}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          <Text style={styles.tagHint}>{'\u65b0\u589e\u55ae\u5b57\u6703\u81ea\u52d5\u5957\u7528\u4ee5\u4e0a\u6a19\u7c64\uff0c\u4e26\u56fa\u5b9a\u5305\u542b\u8907\u7fd2\u6a19\u7c64\u3002'}</Text>
+        </View>
         {tokens.length === 0 && rawText.trim() === '' && (
           <Text style={styles.placeholder}>{'\u8cbc\u4e0a\u6216\u8f09\u5165\u6587\u7ae0\uff0c\u7136\u5f8c\u9ede\u9078\u55ae\u5b57\u4ee5\u67e5\u8a62\u3002'}</Text>
         )}
@@ -303,7 +364,7 @@ export default function ReadingScreen() {
                   const mark = sessionMarks[normalizedWord];
                   const isSelected = selectedKey === token.key;
                   const textStyles = [styles.word];
-                  if (mark?.saved || mark?.review) textStyles.push(styles.wordMarked);
+                  if (mark?.saved) textStyles.push(styles.wordMarked);
                   if (isSelected) textStyles.push(styles.wordSelected);
                   return (
                     <Text
@@ -333,8 +394,8 @@ export default function ReadingScreen() {
           </TouchableWithoutFeedback>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>{selectedWord}</Text>
-            {lookupState?.dictionary?.phonetic ? (
-              <Text style={styles.modalPhonetic}>{lookupState.dictionary.phonetic}</Text>
+            {lookupState?.phonetic ? (
+              <Text style={styles.modalPhonetic}>{lookupState.phonetic}</Text>
             ) : null}
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
               {lookupState?.loading && (
@@ -342,40 +403,6 @@ export default function ReadingScreen() {
               )}
               {!lookupState?.loading && (
                 <>
-                  {lookupState?.localWord && (
-                    <View style={styles.modalSection}>
-                      <Text style={styles.modalLabel}>{'\u672c\u5730\u8a5e\u5eab'}</Text>
-                      {lookupState.localWord.zh ? (
-                        <Text style={styles.modalText}>{lookupState.localWord.zh}</Text>
-                      ) : (
-                        <Text style={styles.modalHint}>{'\u7121\u4e2d\u6587\u7ffb\u8b6f'}</Text>
-                      )}
-                      {lookupState.localWord.exampleEn && (
-                        <Text style={styles.modalSub}>{lookupState.localWord.exampleEn}</Text>
-                      )}
-                      {lookupState.localWord.exampleZh && (
-                        <Text style={styles.modalSub}>{lookupState.localWord.exampleZh}</Text>
-                      )}
-                    </View>
-                  )}
-                  {lookupState?.dictionary && lookupState.dictionary.definitions.length > 0 && (
-                    <View style={styles.modalSection}>
-                      <Text style={styles.modalLabel}>{'\u5b57\u5178\u5b9a\u7fa9'}</Text>
-                      {lookupState.dictionary.definitions.slice(0, 3).map((def, idx) => (
-                        <View key={idx} style={styles.modalDefinition}>
-                          <Text style={styles.modalText}>
-                            {def.partOfSpeech ? def.partOfSpeech + '. ' : ''}{def.definition}
-                          </Text>
-                          {def.example && (
-                            <Text style={styles.modalSub}>{def.example}</Text>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  {lookupState?.dictionaryError && (
-                    <Text style={styles.modalError}>{lookupState.dictionaryError}</Text>
-                  )}
                   {lookupState?.ai && (
                     <View style={styles.modalSection}>
                       <Text style={styles.modalLabel}>{'AI \u88dc\u9f50'}</Text>
@@ -390,10 +417,13 @@ export default function ReadingScreen() {
                       )}
                     </View>
                   )}
+                  {lookupState?.phoneticError && (
+                    <Text style={styles.modalError}>{lookupState.phoneticError}</Text>
+                  )}
                   {lookupState?.aiError && (
                     <Text style={styles.modalError}>{lookupState.aiError}</Text>
                   )}
-                  {lookupState && !lookupState.loading && !lookupState.localWord && !lookupState.dictionary && !lookupState.ai && !lookupState.error && !lookupState.dictionaryError && !lookupState.aiError && (
+                  {lookupState && !lookupState.loading && !lookupState.ai && !lookupState.error && !lookupState.phoneticError && !lookupState.aiError && (
                     <Text style={styles.modalHint}>{'\u67e5\u7121\u8cc7\u6599'}</Text>
                   )}
                   {lookupState?.error && (
@@ -404,7 +434,6 @@ export default function ReadingScreen() {
             </ScrollView>
             <View style={styles.modalButtonsRow}>
               <Button title={'\u52a0\u5165\u55ae\u5b57'} onPress={handleAddWord} disabled={lookupState?.loading || hasSavedWord} />
-              <Button title={'\u52a0\u5165\u8907\u7fd2'} onPress={handleAddReview} disabled={lookupState?.loading || hasReviewTag} />
               <Button title={'\u767c\u97f3'} onPress={handleSpeak} />
             </View>
             <View style={styles.modalActions}>
@@ -447,7 +476,17 @@ const styles = StyleSheet.create({
   modalDefinition: { gap: 4 },
   modalHint: { fontSize: 14, color: '#555' },
   modalError: { fontSize: 14, color: '#c62828' },
-  modalButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  modalButtonsRow: { flexDirection: 'row', justifyContent: 'flex-start', gap: 12 },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  tagSection: { marginTop: 20, borderWidth: 1, borderColor: '#d0d7e2', borderRadius: 10, backgroundColor: '#f2f6ff' },
+  tagHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },
+  tagHeaderText: { fontSize: 14, fontWeight: '600', color: '#333' },
+  tagHeaderValue: { fontSize: 13, color: '#555', flexShrink: 1, textAlign: 'right', marginLeft: 8 },
+  tagList: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, paddingBottom: 10 },
+  tagChip: { paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#c5d1e5', borderRadius: 14, marginRight: 8, marginTop: 6, backgroundColor: '#fff' },
+  tagChipSelected: { backgroundColor: '#e3f2fd', borderColor: '#64b5f6' },
+  tagChipText: { fontSize: 13, color: '#333' },
+  tagChipTextSelected: { color: '#0d47a1' },
+  tagChipTextDisabled: { color: '#777' },
+  tagHint: { fontSize: 12, color: '#666', paddingHorizontal: 14, paddingBottom: 10 },
 });
-
