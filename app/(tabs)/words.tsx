@@ -1,4 +1,4 @@
-﻿import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
