@@ -1,1 +1,0 @@
-﻿declare module 'wink-tokenizer' {\n  type WinkToken = { value: string; tag: string };\n  type TokenizerInstance = { tokenize: (text: string) => WinkToken[] };\n  export default function winkTokenizer(): TokenizerInstance;\n}\n

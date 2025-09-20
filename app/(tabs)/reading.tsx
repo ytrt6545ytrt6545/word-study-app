@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Alert, Button, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Speech from 'expo-speech';
-import winkTokenizer from 'wink-tokenizer';
 
 import { aiCompleteWord, AIFillResult } from '@/utils/ai';
 import { loadTags, loadWords, saveWords, REVIEW_TAG, Word } from '@/utils/storage';
@@ -12,17 +11,24 @@ type Token = { key: string; text: string; isWord: boolean };
 
 type SessionMark = { saved?: boolean };
 
-const tokenizerInstance = winkTokenizer() as { tokenize: (text: string) => { value: string; tag: string }[] };
-
 function tokenize(text: string): Token[] {
-  if (!text) return [];
-  const raw = tokenizerInstance.tokenize(text) as { value: string; tag: string }[];
+  const tokens: Token[] = [];
+  if (!text) return tokens;
+  const wordRegex = /[A-Za-z][A-Za-z'-]*/g;
+  let lastIndex = 0;
   let seq = 0;
-  return raw.map((token) => ({
-    key: `${token.tag}-${seq++}`,
-    text: token.value,
-    isWord: token.tag === 'word',
-  }));
+  let match: RegExpExecArray | null;
+  while ((match = wordRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push({ key: 'gap-' + seq++, text: text.slice(lastIndex, match.index), isWord: false });
+    }
+    tokens.push({ key: 'word-' + seq++, text: match[0], isWord: true });
+    lastIndex = wordRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    tokens.push({ key: 'gap-' + seq++, text: text.slice(lastIndex), isWord: false });
+  }
+  return tokens;
 }
 
 function normalizeWord(text: string): string {
@@ -353,19 +359,12 @@ export default function ReadingScreen() {
             <View style={styles.articleBox}>
               <Text style={styles.articleText}>
                 {tokens.map((token) => {
-                  if (!token.isWord) {
-                    return (
-                      <Text key={token.key} style={styles.nonWord}>
-                        {token.text}
-                      </Text>
-                    );
-                  }
                   const normalizedWord = normalizeWord(token.text);
                   const mark = sessionMarks[normalizedWord];
                   const isSelected = selectedKey === token.key;
-                  const textStyles = [styles.word];
-                  if (mark?.saved) textStyles.push(styles.wordMarked);
-                  if (isSelected) textStyles.push(styles.wordSelected);
+                  const textStyles = [token.isWord ? styles.word : styles.nonWord];
+                  if (token.isWord && mark?.saved) textStyles.push(styles.wordMarked);
+                  if (token.isWord && isSelected) textStyles.push(styles.wordSelected);
                   return (
                     <Text
                       key={token.key}
