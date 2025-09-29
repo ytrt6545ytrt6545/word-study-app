@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+﻿import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Alert, Button, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Speech from 'expo-speech';
@@ -6,6 +6,7 @@ import * as Speech from 'expo-speech';
 import { aiCompleteWord, AIFillResult } from '@/utils/ai';
 import { loadTags, loadWords, saveWords, REVIEW_TAG, Word } from '@/utils/storage';
 import { getSpeechOptions } from '@/utils/tts';
+import { useI18n } from '@/i18n';
 
 type Token = { key: string; text: string; isWord: boolean };
 
@@ -71,6 +72,7 @@ type LookupState = {
 };
 
 export default function ReadingScreen() {
+  const { t } = useI18n();
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export default function ReadingScreen() {
   }, []);
 
   const tokens = useMemo(() => tokenize(rawText), [rawText]);
-  const selectedTagsLabel = useMemo(() => selectedTags.join('、'), [selectedTags]);
+  const selectedTagsLabel = useMemo(() => selectedTags.join(" / "), [selectedTags]);
 
   const toggleDefaultTag = useCallback((tag: string) => {
     setSelectedTags((prev) => {
@@ -136,7 +138,7 @@ export default function ReadingScreen() {
       setSelectedWord('');
       setLookupState(null);
     } catch (err: any) {
-      Alert.alert('\u8b80\u53d6\u6a94\u6848\u5931\u6557', err?.message || '\u8acb\u7a0d\u5f8c\u518d\u8a66');
+      Alert.alert(t('reading.file.readFailed'), err?.message || t('common.tryLater'));
     }
   };
 
@@ -315,8 +317,8 @@ export default function ReadingScreen() {
         />
         <View style={styles.tagSection}>
           <Pressable style={styles.tagHeader} onPress={() => setShowTagSelector((prev) => !prev)}>
-            <Text style={styles.tagHeaderText}>{'\u9810\u8a2d\u6a19\u7c64'}</Text>
-            <Text style={styles.tagHeaderValue}>{selectedTagsLabel || '\uff08\u5c1a\u672a\u9078\u64c7\uff09'}</Text>
+            <Text style={styles.tagHeaderText}>{t('reading.tags.header')}</Text>
+            <Text style={styles.tagHeaderValue}>{selectedTags.length ? selectedTags.join('、') : t('reading.tags.none')}</Text>
           </Pressable>
           {showTagSelector && (
             <View style={styles.tagList}>
@@ -341,21 +343,21 @@ export default function ReadingScreen() {
                         isMandatory && styles.tagChipTextDisabled,
                       ]}
                     >
-                      {isMandatory ? `${tag}（必選）` : tag}
+                      {isMandatory ? `${tag}嚗??賂?` : tag}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           )}
-          <Text style={styles.tagHint}>{'\u65b0\u589e\u55ae\u5b57\u6703\u81ea\u52d5\u5957\u7528\u4ee5\u4e0a\u6a19\u7c64\uff0c\u4e26\u56fa\u5b9a\u5305\u542b\u8907\u7fd2\u6a19\u7c64\u3002'}</Text>
+          <Text style={styles.tagHint}>{t('reading.tags.hint')}</Text>
         </View>
         {tokens.length === 0 && rawText.trim() === '' && (
-          <Text style={styles.placeholder}>{'\u8cbc\u4e0a\u6216\u8f09\u5165\u6587\u7ae0\uff0c\u7136\u5f8c\u9ede\u9078\u55ae\u5b57\u4ee5\u67e5\u8a62\u3002'}</Text>
+          <Text style={styles.placeholder}>{t('reading.placeholder.hint')}</Text>
         )}
         {tokens.length > 0 && (
           <View style={styles.articleSection}>
-            <Text style={styles.sectionTitle}>{'\u95b1\u8b80\u5167\u5bb9'}</Text>
+            <Text style={styles.sectionTitle}>{t('reading.section.article')}</Text>
             <View style={styles.articleBox}>
               <Text style={styles.articleText}>
                 {tokens.map((token) => {
@@ -382,9 +384,9 @@ export default function ReadingScreen() {
         )}
       </ScrollView>
       <View style={styles.toolbar}>
-        <Button title={'\u958b\u5553 TXT'} onPress={onPickFile} />
+        <Button title={t('reading.toolbar.pickFile')} onPress={onPickFile} />
         <View style={{ width: 12 }} />
-        <Button title={'\u6e05\u7a7a'} onPress={clearAll} />
+        <Button title={t('reading.toolbar.clear')} onPress={clearAll} />
       </View>
       <Modal visible={!!selectedKey} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalContainer}>
@@ -398,13 +400,13 @@ export default function ReadingScreen() {
             ) : null}
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
               {lookupState?.loading && (
-                <Text style={styles.modalHint}>{'\u67e5\u8a62\u4e2d...'}</Text>
+                <Text style={styles.modalHint}>{t('reading.modal.lookupLoading')}</Text>
               )}
               {!lookupState?.loading && (
                 <>
                   {lookupState?.ai && (
                     <View style={styles.modalSection}>
-                      <Text style={styles.modalLabel}>{'AI \u88dc\u9f50'}</Text>
+                      <Text style={styles.modalLabel}>{t('reading.modal.ai')}</Text>
                       {lookupState.ai.zh && (
                         <Text style={styles.modalText}>{lookupState.ai.zh}</Text>
                       )}
@@ -423,7 +425,7 @@ export default function ReadingScreen() {
                     <Text style={styles.modalError}>{lookupState.aiError}</Text>
                   )}
                   {lookupState && !lookupState.loading && !lookupState.ai && !lookupState.error && !lookupState.phoneticError && !lookupState.aiError && (
-                    <Text style={styles.modalHint}>{'\u67e5\u7121\u8cc7\u6599'}</Text>
+                    <Text style={styles.modalHint}>{t('reading.modal.noData')}</Text>
                   )}
                   {lookupState?.error && (
                     <Text style={styles.modalError}>{lookupState.error}</Text>
@@ -432,11 +434,11 @@ export default function ReadingScreen() {
               )}
             </ScrollView>
             <View style={styles.modalButtonsRow}>
-              <Button title={'\u52a0\u5165\u55ae\u5b57'} onPress={handleAddWord} disabled={lookupState?.loading || hasSavedWord} />
-              <Button title={'\u767c\u97f3'} onPress={handleSpeak} />
+              <Button title={t('reading.modal.addWord')} onPress={handleAddWord} disabled={lookupState?.loading || hasSavedWord} />
+              <Button title={t('reading.modal.speak')} onPress={handleSpeak} />
             </View>
             <View style={styles.modalActions}>
-              <Button title={'\u95dc\u9589'} onPress={closeModal} />
+              <Button title={t('reading.modal.close')} onPress={closeModal} />
             </View>
           </View>
         </View>
