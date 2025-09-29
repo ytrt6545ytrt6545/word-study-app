@@ -4,6 +4,7 @@ import * as Speech from "expo-speech";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { REVIEW_TAG, bumpReview, loadWords, toggleWordTag, Word, srsAnswer, getDailyStats, bumpDailyStats, getSrsLimits } from "@/utils/storage";
 import { getSpeechOptions } from "@/utils/tts";
+import { useI18n } from "@/i18n";
 
 type QuizChoice = { zh: string; correct: boolean };
 type Quiz = { word: Word; en: string; choices: QuizChoice[] };
@@ -45,6 +46,9 @@ export default function ReviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tag?: string | string[]; mode?: string | string[] }>();
   const tagParam = (Array.isArray(params.tag) ? params.tag[0] : params.tag || "").toString();
+  const modeParam = (Array.isArray(params.mode) ? params.mode[0] : params.mode || "").toString();
+  const isLoopMode = modeParam === 'tag-loop' || modeParam === 'loop';
+  const { t } = useI18n();
 
   const [allWords, setAllWords] = useState<Word[]>([]);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -128,6 +132,16 @@ export default function ReviewScreen() {
   }, []);
 
   const refillQueue = useCallback(() => {
+    if (isLoopMode) {
+      queueRef.current = shuffle([...candidates]);
+      if (queueRef.current.length === 0) {
+        markFinished();
+      } else {
+        finishedRef.current = false;
+        setFinished(false);
+      }
+      return;
+    }
     const now = Date.now();
     const due = candidates.filter((w) => w.srsDue && Date.parse(w.srsDue) <= now);
     const notDue = candidates.filter((w) => !(w.srsDue && Date.parse(w.srsDue) <= now));
@@ -148,7 +162,7 @@ export default function ReviewScreen() {
       finishedRef.current = false;
       setFinished(false);
     }
-  }, [candidates, limits.dailyNewLimit, limits.dailyReviewLimit, markFinished]);
+  }, [isLoopMode, candidates, limits.dailyNewLimit, limits.dailyReviewLimit, markFinished]);
 
   const buildQuizFromWord = useCallback((correct: Word) => {
     const correctZh = (correct.zh || '').trim() || correct.en;
@@ -221,26 +235,33 @@ export default function ReviewScreen() {
     const currentQuiz = quiz;
     const picked = currentQuiz.choices[idx];
     const isCorrect = !!picked?.correct;
-    await srsAnswer(currentQuiz.en, isCorrect);
-    const isNew = (currentQuiz.word.srsReps || 0) === 0;
-    if (isNew) {
-      statsRef.current.newUsed += 1;
-      const s = await bumpDailyStats({ newUsed: 1 });
-      setStats({ newUsed: s.newUsed, reviewUsed: s.reviewUsed });
+    if (isLoopMode) {
+      if (!isCorrect) {
+        queueRef.current.push(currentQuiz.word);
+        return;
+      }
     } else {
-      statsRef.current.reviewUsed += 1;
-      const s = await bumpDailyStats({ reviewUsed: 1 });
-      setStats({ newUsed: s.newUsed, reviewUsed: s.reviewUsed });
-    }
-    if (!isCorrect) {
-      queueRef.current.push(currentQuiz.word);
-      return;
+      await srsAnswer(currentQuiz.en, isCorrect);
+      const isNew = (currentQuiz.word.srsReps || 0) === 0;
+      if (isNew) {
+        statsRef.current.newUsed += 1;
+        const s = await bumpDailyStats({ newUsed: 1 });
+        setStats({ newUsed: s.newUsed, reviewUsed: s.reviewUsed });
+      } else {
+        statsRef.current.reviewUsed += 1;
+        const s = await bumpDailyStats({ reviewUsed: 1 });
+        setStats({ newUsed: s.newUsed, reviewUsed: s.reviewUsed });
+      }
+      if (!isCorrect) {
+        queueRef.current.push(currentQuiz.word);
+        return;
+      }
     }
     autoAdvanceTimer.current = setTimeout(() => {
       autoAdvanceTimer.current = null;
       advanceToNext();
     }, 650);
-  }, [selected, quiz, advanceToNext]);
+  }, [selected, quiz, advanceToNext, isLoopMode]);
 
   const onRemoveReviewTag = useCallback(() => {
     if (!quiz) return;
@@ -305,12 +326,23 @@ export default function ReviewScreen() {
   useEffect(() => {
     if (!finished) return;
     safeStopSpeech();
-    Alert.alert("\u5b8c\u6210", "\u5fa9\u7fd2\u5b8c\u6210\uff0c\u5c07\u65bc 3 \u79d2\u5f8c\u8fd4\u56de\u4e0a\u4e00\u9801");
+    if (isLoopMode) {
+      Alert.alert(
+        t('review.loop.done.title'),
+        t('review.loop.done.message'),
+        [
+          { text: t('review.loop.again'), onPress: () => { finishedRef.current = false; setFinished(false); setSelected(null); setQuiz(null); refillQueue(); } },
+          { text: t('review.loop.finish'), style: 'cancel', onPress: () => { const timer = setTimeout(() => { try { router.back(); } catch {} }, 3000); } },
+        ]
+      );
+      return;
+    }
+    Alert.alert('完成', '複習完成，將於 3 秒後返回上一頁');
     const timer = setTimeout(() => {
       try { router.back(); } catch {}
     }, 3000);
     return () => clearTimeout(timer);
-  }, [finished, router]);
+  }, [finished, router, isLoopMode, refillQueue, t]);
 
   if (loading) {
     return (
@@ -342,8 +374,10 @@ export default function ReviewScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{"\u8907\u7fd2"}</Text>
-      <Text style={styles.hint}>{`\u5230\u671f\uff1a${dueCount}\uff5c\u65b0\u5361\u53ef\u9078\uff1a${Math.min(newPool, newRemain)}\uff08\u4eca\u65e5 \u65b0\u5361 ${stats.newUsed}/${limits.dailyNewLimit}\uff0c\u8907\u7fd2 ${stats.reviewUsed}/${limits.dailyReviewLimit}\uff09`}</Text>
+      <Text style={styles.title}>{t('review.title')}</Text>
+      {!isLoopMode && (
+        <Text style={styles.hint}>{`到期：${dueCount}｜新卡可選：${Math.min(newPool, newRemain)}（今日 新卡 ${stats.newUsed}/${limits.dailyNewLimit}，複習 ${stats.reviewUsed}/${limits.dailyReviewLimit}）`}</Text>
+      )}
       {quiz && (
         <>
           <Text style={styles.en}>{quiz.en}</Text>
@@ -363,11 +397,11 @@ export default function ReviewScreen() {
             })}
           </View>
           <View style={styles.row}>
-            <Button title={"\u518d\u807d\u4e00\u6b21"} onPress={speakAgain} />
+            <Button title={t('review.hearAgain')} onPress={speakAgain} />
             <View style={{ width: 8 }} />
-            <Button title={"\u4e0b\u4e00\u984c"} onPress={nextQuiz} disabled={selected == null} />
+            <Button title={t('review.next')} onPress={nextQuiz} disabled={selected == null} />
             <View style={{ width: 8 }} />
-            <Button title={"\u592a\u719f\u4e86\uff0c\u79fb\u9664\u8907\u7fd2\u6a19\u7c64"} onPress={onRemoveReviewTag} />
+            <Button title={t('review.removeReviewTag')} onPress={onRemoveReviewTag} />
           </View>
         </>
       )}
