@@ -6,10 +6,12 @@ import { aiCompleteWord } from "@/utils/ai";
 import { useTabMark } from "@/context/TabMarkContext";
 import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
+import { useI18n } from "@/i18n";
 
 export default function Explore() {
   const router = useRouter();
   const { setMarkedTab } = useTabMark();
+  const { t } = useI18n();
   const params = useLocalSearchParams<{ tag?: string | string[] }>();
   const defaultTag = (Array.isArray(params.tag) ? params.tag[0] : params.tag || "").toString();
 
@@ -25,10 +27,16 @@ export default function Explore() {
   const speakWordTwice = async (text: string) => {
     const t = (text || "").toString().trim();
     if (!t) return;
-    try { Speech.stop(); } catch {}
-    const opts = await getSpeechOptions('en-US');
-    Speech.speak(t, { language: 'en-US', voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
-    setTimeout(() => { try { Speech.speak(t, { language: 'en-US', voice: opts.voice, rate: opts.rate, pitch: opts.pitch }); } catch {} }, 600);
+    try {
+      Speech.stop();
+    } catch {}
+    const opts = await getSpeechOptions("en-US");
+    Speech.speak(t, { language: "en-US", voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
+    setTimeout(() => {
+      try {
+        Speech.speak(t, { language: "en-US", voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
+      } catch {}
+    }, 600);
   };
 
   const onClear = () => {
@@ -42,22 +50,29 @@ export default function Explore() {
   };
 
   const addWord = async () => {
-    const _en = en.trim(), _zh = zh.trim();
-    const _exEn = exEn.trim(), _exZh = exZh.trim();
+    const _en = en.trim();
+    const _zh = zh.trim();
+    const _exEn = exEn.trim();
+    const _exZh = exZh.trim();
     if (!_en || !_zh) return;
     const list = await loadWords();
-    if (list.some(w => w.en.toLowerCase() === _en.toLowerCase())) {
-      Alert.alert("重複單字", `${_en} 已在清單`);
+    if (list.some((w) => w.en.toLowerCase() === _en.toLowerCase())) {
+      Alert.alert(t('explore.exists'), t('explore.exists.message', { word: _en }));
       return;
     }
     const tagsSet = new Set<string>([REVIEW_TAG]);
     if (defaultTag && defaultTag !== REVIEW_TAG) tagsSet.add(defaultTag);
-    const next: Word[] = [...list, { en: _en, zh: _zh, exampleEn: _exEn, exampleZh: _exZh, status: "unknown", createdAt: new Date().toISOString(), reviewCount: 0, tags: Array.from(tagsSet) }];
+    const next: Word[] = [
+      ...list,
+      { en: _en, zh: _zh, exampleEn: _exEn, exampleZh: _exZh, status: "unknown", createdAt: new Date().toISOString(), reviewCount: 0, tags: Array.from(tagsSet) },
+    ];
     await saveWords(next);
     onClear();
-    // 保持在新增單字頁，不跳去清單
-    setTimeout(() => { setMarkedTab(null); }, 0);
-    Alert.alert("已新增", `${_en} 已加入清單`);
+    // 新增單字後，取消 Explore 標記
+    setTimeout(() => {
+      setMarkedTab(null);
+    }, 0);
+    Alert.alert(t('explore.added'), t('explore.added.message', { word: _en }));
   };
 
   const onAIFill = async () => {
@@ -66,23 +81,23 @@ export default function Explore() {
     const onlyEn = !!_en && !_zh;
     const onlyZh = !!_zh && !_en;
     if (!onlyEn && !onlyZh) {
-      Alert.alert("AI補齊", "請只填「英文單字」或「中文翻譯」其一");
+      Alert.alert(t('explore.ai.onlyOne'), t('explore.ai.onlyOne.message'));
       return;
     }
     try {
       setAiLoading(true);
       const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
-      // 強制刷新：只要有回傳就覆蓋
+      // 只要有回傳就覆寫欄位
       if (res.en !== undefined) setEn(res.en || "");
       if (res.zh !== undefined) setZh(res.zh || "");
       if (res.exampleEn !== undefined) setExEn(res.exampleEn || "");
       if (res.exampleZh !== undefined) setExZh(res.exampleZh || "");
 
-      // 念英文單字兩次（以 AI 為主，否則用輸入）
+      // 念英文單字兩次，優先用 AI 產出，否則用輸入
       const speakText = (res.en || _en || "").toString();
       if (speakText) await speakWordTwice(speakText);
     } catch (e: any) {
-      Alert.alert("AI 失敗", e?.message ?? "請稍後再試");
+      Alert.alert(t('explore.ai.failed'), e?.message ?? '');
     } finally {
       setAiLoading(false);
     }
@@ -91,41 +106,42 @@ export default function Explore() {
   return (
     <View style={styles.container}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <Text style={styles.title}>{"新增單字"}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Button title="清空" onPress={onClear} />
-            <Button title="聽" onPress={() => speakWordTwice(en)} />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <Text style={styles.title}>{t('explore.title')}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Button title={t('explore.clear')} onPress={onClear} />
+            <Button title={t('explore.preview')} onPress={() => speakWordTwice(en)} />
           </View>
         </View>
         <TextInput
           style={styles.input}
-          placeholder={"英文單字"}
+          placeholder={t('explore.input.en')}
           value={en}
           onChangeText={setEn}
           autoCapitalize="none"
-          onFocus={() => { if (en.trim() && zh.trim()) setZh(""); }}
+          onFocus={() => {
+            if (en.trim() && zh.trim()) setZh("");
+          }}
         />
         <TextInput
           style={[styles.input, styles.inputMultiline, { height: zhHeight }]}
-          placeholder={"英文單字中文翻譯"}
+          placeholder={t('explore.input.zh')}
           value={zh}
           onChangeText={setZh}
           multiline
           scrollEnabled={false}
-          onFocus={() => { if (en.trim() && zh.trim()) setEn(""); }}
+          onFocus={() => {
+            if (en.trim() && zh.trim()) setEn("");
+          }}
           onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
         />
         {/* Hidden measurer to auto-fit height when content is set by AI */}
-        <Text
-          style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]}
-          onLayout={(e) => setExEnHeight(Math.max(40, e.nativeEvent.layout.height))}
-        >
+        <Text style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]} onLayout={(e) => setExEnHeight(Math.max(40, e.nativeEvent.layout.height))}>
           {exEn || " "}
         </Text>
         <TextInput
           style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
-          placeholder={"英文例句"}
+          placeholder={t('explore.input.exEn')}
           value={exEn}
           onChangeText={setExEn}
           multiline
@@ -133,15 +149,12 @@ export default function Explore() {
           onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
         />
         {/* Hidden measurer to auto-fit height when content is set by AI */}
-        <Text
-          style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]}
-          onLayout={(e) => setExZhHeight(Math.max(40, e.nativeEvent.layout.height))}
-        >
+        <Text style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]} onLayout={(e) => setExZhHeight(Math.max(40, e.nativeEvent.layout.height))}>
           {exZh || " "}
         </Text>
         <TextInput
           style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
-          placeholder={"英文例句中文翻譯"}
+          placeholder={t('explore.input.exZh')}
           value={exZh}
           onChangeText={setExZh}
           multiline
@@ -149,13 +162,13 @@ export default function Explore() {
           onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
         />
         <View style={styles.rowButtons}>
-          <Button title={aiLoading ? "AI補齊中..." : "AI補齊"} onPress={onAIFill} disabled={aiLoading} />
+          <Button title={aiLoading ? t('explore.ai.loading') : t('explore.ai')} onPress={onAIFill} disabled={aiLoading} />
           {aiLoading && <ActivityIndicator style={{ marginLeft: 8 }} />}
         </View>
-        <Button title={"加入清單"} onPress={addWord} />
+        <Button title={t('explore.add')} onPress={addWord} />
         {defaultTag ? (
           <View style={{ marginTop: 10 }}>
-            <Button title="回到標籤" onPress={() => router.push({ pathname: '/tags/[tag]', params: { tag: defaultTag } })} />
+            <Button title={t('explore.backToTag')} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: defaultTag } })} />
           </View>
         ) : null}
       </ScrollView>
@@ -170,6 +183,5 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, marginBottom: 8, backgroundColor: "#fff", width: "100%" },
   inputMultiline: { textAlignVertical: "top" as const },
   rowButtons: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  hiddenMeasure: { position: 'absolute', opacity: 0, zIndex: -1, left: 0, right: 0, includeFontPadding: true },
+  hiddenMeasure: { position: "absolute", opacity: 0, zIndex: -1, left: 0, right: 0, includeFontPadding: true },
 });
-
