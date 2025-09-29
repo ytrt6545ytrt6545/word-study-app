@@ -46,7 +46,7 @@ export function mapPitch(gender: VoiceGender): number {
 
 export function mapPitchFromPercent(percent: number): number {
   const p = Math.max(0, Math.min(100, percent));
-  // 0 => 0.50（低音較男）；50 => 1.00；100 => 1.50（高音較女）
+  // 0 => 0.50（低）; 50 => 1.00; 100 => 1.50（高）
   return 0.5 + (p / 100) * 1.0;
 }
 
@@ -121,6 +121,7 @@ export async function getSpeechOptions(language?: string): Promise<{ language?: 
   const pitch = mapPitchFromPercent(pitchPercent);
   return { language, rate, pitch, voice };
 }
+
 
 
 
