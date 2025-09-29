@@ -4,11 +4,13 @@ import * as Speech from "expo-speech";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { bumpReview, loadWords, saveWords, Word, WordStatus, loadTags, toggleWordTag } from "../../utils/storage";
 import { getSpeechOptions } from "../../utils/tts";
+import { useI18n } from "@/i18n";
 
 export default function WordDetail() {
   const router = useRouter();
   const params = useLocalSearchParams<{ en?: string | string[] }>();
   const enParam = Array.isArray(params.en) ? params.en[0] : params.en || "";
+  const { t } = useI18n();
 
   const [word, setWord] = useState<Word | null>(null);
   const [zh, setZh] = useState("");
@@ -25,9 +27,9 @@ export default function WordDetail() {
   useEffect(() => {
     (async () => {
       const list = await loadWords();
-      const found = list.find(w => w.en.toLowerCase() === enParam.toLowerCase());
+      const found = list.find((w) => w.en.toLowerCase() === enParam.toLowerCase());
       if (!found) {
-        Alert.alert("\u627E\u4E0D\u5230\u55AE\u5B57", `${enParam} \u4E0D\u5728\u6E05\u55AE\u4E2D`);
+        Alert.alert(t('index.review'), `${enParam} 不在清單中`);
         router.back();
         return;
       }
@@ -42,7 +44,9 @@ export default function WordDetail() {
 
   useEffect(() => {
     return () => {
-      try { Speech.stop(); } catch {}
+      try {
+        Speech.stop();
+      } catch {}
     };
   }, []);
 
@@ -53,14 +57,14 @@ export default function WordDetail() {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "";
     const yy = String(d.getFullYear()).slice(-2);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
     return `${yy}/${mm}/${dd}`;
   };
 
   const refreshWordFromStorage = async () => {
     const list = await loadWords();
-    const found = list.find(w => w.en.toLowerCase() === enParam.toLowerCase());
+    const found = list.find((w) => w.en.toLowerCase() === enParam.toLowerCase());
     if (found) setWord(found);
   };
 
@@ -81,7 +85,7 @@ export default function WordDetail() {
           pitch: opts.pitch,
           onDone: () => resolve(),
           onStopped: () => resolve(),
-          onError: (e) => reject(e),
+          onError: () => resolve(),
         });
       } catch (e) {
         reject(e);
@@ -101,7 +105,6 @@ export default function WordDetail() {
     if (listening) return;
     try {
       setListening(true);
-      // 記錄一次複習（有時間窗防重複）
       await bumpReview(word.en);
       await refreshWordFromStorage();
       const en = word.en;
@@ -109,20 +112,14 @@ export default function WordDetail() {
       const exEnT = exampleEn.trim();
       const exZhT = exampleZh.trim();
 
-      // 英文單字 1 次
       await speakOnce(en, "en-US");
-      // 英文單字中文翻譯 1 次（若有）
       if (zhT) await speakOnce(zhT, "zh-TW");
-      // 英文單字 3 次（間隔 0.5 秒）
       await repeatSpeak(en, 3, 0, "en-US");
-      // 英文例句 1 次（若有）
       if (exEnT) await speakOnce(exEnT, "en-US");
-      // 英文例句中文翻譯 1 次（若有）
       if (exZhT) await speakOnce(exZhT, "zh-TW");
-      // 英文例句 3 次（間隔 0.5 秒）
       if (exEnT) await repeatSpeak(exEnT, 3, 0, "en-US");
     } catch (e: any) {
-      Alert.alert("聽力播放失敗", e?.message ?? "請稍後再試");
+      Alert.alert(t('common.ok'), e?.message ?? '');
     } finally {
       setListening(false);
     }
@@ -132,21 +129,21 @@ export default function WordDetail() {
     if (!word) return;
     const list = await loadWords();
     const updated: Word = { ...word, zh: zh.trim(), exampleEn: exampleEn.trim(), exampleZh: exampleZh.trim(), status };
-    const merged = list.map(w => (w.en === word.en ? updated : w));
+    const merged = list.map((w) => (w.en === word.en ? updated : w));
     await saveWords(merged);
-    Alert.alert("\u5DF2\u5132\u5B58", `${word.en} \u5DF2\u66F4\u65B0`);
+    Alert.alert(t('word.saved'), t('word.saved.message', { word: word.en }));
   };
 
   const remove = async () => {
     if (!word) return;
-    Alert.alert("\u522A\u9664\u55AE\u5B57", `\u78BA\u5B9A\u522A\u9664\u300C${word.en}\u300D\uFF1F`, [
-      { text: "\u53D6\u6D88" },
+    Alert.alert(t('word.confirmDelete.title'), t('word.confirmDelete.message', { word: word.en }), [
+      { text: t('common.cancel') },
       {
-        text: "\u522A\u9664",
+        text: t('common.delete'),
         style: "destructive",
         onPress: async () => {
           const list = await loadWords();
-          const next = list.filter(w => w.en !== word.en);
+          const next = list.filter((w) => w.en !== word.en);
           await saveWords(next);
           router.back();
         },
@@ -154,60 +151,65 @@ export default function WordDetail() {
     ]);
   };
 
-  if (!word) return <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }}><Text style={styles.title}>{"\u8F09\u5165\u4E2D..."}</Text></ScrollView>;
+  if (!word)
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }}>
+        <Text style={styles.title}>{"載入中..."}</Text>
+      </ScrollView>
+    );
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
       <Text style={styles.title}>{word.en}</Text>
       <View style={styles.metaRow}>
-        <Text style={styles.metaText}>{`新增：${formatYMD(word.createdAt)}`}</Text>
-        <Text style={styles.metaTextStrong}>{`複習：${(word.reviewCount || 0).toString()}`}</Text>
+        <Text style={styles.metaText}>{t('word.createdAt', { date: formatYMD(word.createdAt) })}</Text>
+        <Text style={styles.metaTextStrong}>{t('word.reviewCount', { count: (word.reviewCount || 0).toString() })}</Text>
       </View>
 
-      <Text style={styles.label}>{"\u4E2D\u6587\u7FFB\u8B6F"}</Text>
+      <Text style={styles.label}>{t('word.zh')}</Text>
       <TextInput
         style={[styles.input, styles.inputMultiline, { height: zhHeight }]}
         value={zh}
         onChangeText={setZh}
-        placeholder={"\u4E2D\u6587\u7FFB\u8B6F"}
+        placeholder={"中文翻譯"}
         multiline
         scrollEnabled={false}
         onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
       />
 
-      <Text style={styles.label}>{"\u82F1\u6587\u4F8B\u53E5"}</Text>
+      <Text style={styles.label}>{t('word.exEn')}</Text>
       <TextInput
         style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
         value={exampleEn}
         onChangeText={setExampleEn}
-        placeholder={"\u82F1\u6587\u4F8B\u53E5"}
+        placeholder={"英文例句"}
         multiline
         scrollEnabled={false}
         onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
       />
 
-      <Text style={styles.label}>{"\u4F8B\u53E5\u4E2D\u6587\u7FFB\u8B6F"}</Text>
+      <Text style={styles.label}>{t('word.exZh')}</Text>
       <TextInput
         style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
         value={exampleZh}
         onChangeText={setExampleZh}
-        placeholder={"\u4F8B\u53E5\u4E2D\u6587\u7FFB\u8B6F"}
+        placeholder={"例句中文翻譯"}
         multiline
         scrollEnabled={false}
         onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
       />
 
-      <Pressable onPress={() => setStatus(status === 'unknown' ? 'learning' : status === 'learning' ? 'mastered' : 'unknown')}>
-        <Text style={styles.label}>{"\u719F\u6089\u5EA6"}</Text>
+      <Pressable onPress={() => setStatus(status === "unknown" ? "learning" : status === "learning" ? "mastered" : "unknown")}>
+        <Text style={styles.label}>{t('word.familiarity')}</Text>
         <View style={styles.pillRow}>
-          <View style={[styles.dot, status==="unknown"  && styles.dotRed]} />
-          <View style={[styles.dot, status==="learning" && styles.dotYellow]} />
-          <View style={[styles.dot, status==="mastered" && styles.dotGreen]} />
+          <View style={[styles.dot, status === "unknown" && styles.dotRed]} />
+          <View style={[styles.dot, status === "learning" && styles.dotYellow]} />
+          <View style={[styles.dot, status === "mastered" && styles.dotGreen]} />
         </View>
       </Pressable>
 
       <Pressable onPress={() => setTagsExpanded((v) => !v)}>
-        <Text style={styles.label}>{"標籤"}</Text>
+        <Text style={styles.label}>{t('word.tags')}</Text>
       </Pressable>
       {tagsExpanded && (
         <View style={styles.tagsList}>
@@ -220,14 +222,14 @@ export default function WordDetail() {
               </Pressable>
             );
           })}
-          {tags.length === 0 && <Text style={styles.hint}>尚無標籤，請先到首頁新增</Text>}
+          {tags.length === 0 && <Text style={styles.hint}>{t('word.tags.none')}</Text>}
         </View>
       )}
 
       <View style={styles.rowButtons}>
-        <Button title={listening ? "播放中..." : "聽力"} onPress={onListen} disabled={listening} />
-        <Button title={"\u5132\u5B58"} onPress={save} />
-        <Button title={"\u522A\u9664"} color="#c62828" onPress={remove} />
+        <Button title={listening ? t('word.playing') : t('word.play')} onPress={onListen} disabled={listening} />
+        <Button title={t('word.save')} onPress={save} />
+        <Button title={t('word.delete')} color="#c62828" onPress={remove} />
       </View>
     </ScrollView>
   );
@@ -236,19 +238,19 @@ export default function WordDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: -6, marginBottom: 8 },
-  metaText: { fontSize: 12, color: '#666' },
-  metaTextStrong: { fontSize: 12, color: '#c62828' },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: -6, marginBottom: 8 },
+  metaText: { fontSize: 12, color: "#666" },
+  metaTextStrong: { fontSize: 12, color: "#c62828" },
   label: { marginTop: 12, marginBottom: 6, fontSize: 14, color: "#333" },
   input: { borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, backgroundColor: "#fff", width: "100%" },
   inputMultiline: { textAlignVertical: "top" as const },
   rowButtons: { flexDirection: "row", gap: 10, marginTop: 16 },
   tagsList: { marginTop: 8, gap: 8 },
-  tagRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-  checkbox: { width: 18, height: 18, borderWidth: 1, borderColor: '#888', marginRight: 8, borderRadius: 3, backgroundColor: '#fff' },
-  checkboxChecked: { backgroundColor: '#1976d2', borderColor: '#1976d2' },
+  tagRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
+  checkbox: { width: 18, height: 18, borderWidth: 1, borderColor: "#888", marginRight: 8, borderRadius: 3, backgroundColor: "#fff" },
+  checkboxChecked: { backgroundColor: "#1976d2", borderColor: "#1976d2" },
   tagText: { fontSize: 14 },
-  hint: { color: '#777' },
+  hint: { color: "#777" },
   pillRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   dot: { width: 18, height: 18, borderRadius: 9, marginRight: 8, backgroundColor: "#ddd", borderWidth: 1, borderColor: "#bbb" },
   dotRed: { backgroundColor: "#f44336" },
