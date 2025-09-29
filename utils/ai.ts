@@ -7,9 +7,9 @@ export async function callAI(prompt: string): Promise<AIResponse> {
   if (!key) {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       await new Promise((r) => setTimeout(r, 300));
-      return { text: `示例回應：${prompt || '請輸入提示'}` };
+      return { text: `示範回應：${prompt || '請輸入內容'}` };
     }
-    throw new Error('尚未設定 OpenAI API Key。請設定環境變數 EXPO_PUBLIC_OPENAI_API_KEY 後再建置。');
+    throw new Error('尚未設定 OpenAI API Key，請設置環境變數 EXPO_PUBLIC_OPENAI_API_KEY 後再建置。');
   }
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -22,8 +22,8 @@ export async function callAI(prompt: string): Promise<AIResponse> {
       model: 'gpt-4o-mini',
       temperature: 0.2,
       messages: [
-        { role: 'system', content: '你是英中翻譯助手，只回覆簡短中文翻譯，不提供解釋。' },
-        { role: 'user', content: prompt || '請輸入提示' },
+        { role: 'system', content: '你是英中翻譯助手，只輸出簡短中文翻譯，不要解釋。' },
+        { role: 'user', content: prompt || '請輸入內容' },
       ],
     }),
   });
@@ -58,21 +58,21 @@ export async function aiCompleteWord(input: { en?: string; zh?: string }): Promi
       const word = hasEn ? en : 'example';
       return {
         en: hasEn ? en : 'example',
-        zh: zh || (hasEn ? '請填入對應的中文意思' : '這是示例中文'),
+        zh: zh || (hasEn ? '請填入對應中文翻譯' : '這是示例中文'),
         exampleEn: `This is an example sentence using ${word}.`,
         exampleZh: `這是一個示例句子，使用 ${hasEn ? en : 'example'}。`,
       };
     }
-    throw new Error('尚未設定 OpenAI API Key。請設定 EXPO_PUBLIC_OPENAI_API_KEY 後再建置。');
+    throw new Error('尚未設定 OpenAI API Key，請設置 EXPO_PUBLIC_OPENAI_API_KEY 後再建置。');
   }
 
   // System prompt: ensure zh is pure translation (no explanations)
   const system = [
-    '你是一個英中詞彙助理，請輸出 JSON 物件：{ en, zh, exampleEn, exampleZh }。',
-    'en: 英文字',
-    'zh: 對應的中文翻譯（不包含解釋）',
-    'exampleEn: 一句包含該英文的英文例句',
-    'exampleZh: 對應的中文翻譯例句（不包含解釋）',
+    '你是一位英中詞彙助手，請輸出 JSON 物件：{ en, zh, exampleEn, exampleZh }',
+    'en: 英文單字',
+    'zh: 對應的中文翻譯（不要解釋）',
+    'exampleEn: 一句包含該單字的英文例句',
+    'exampleZh: 上述例句的中文翻譯（不要解釋）',
   ].join('\n');
 
   const user = JSON.stringify({ en, zh });
@@ -130,9 +130,9 @@ export async function aiCompleteWord(input: { en?: string; zh?: string }): Promi
     // Remove common wrapping quotes/brackets
     s = s.replace(/^[\'"`\u300C\u300E\u300A]+/, '').replace(/[\'"`\u300D\u300F\u300B]+$/, '');
     // Remove parenthetical/explanatory tails
-    s = s.replace(/（.*?）/g, '').replace(/\(.*?\)/g, '');
+    s = s.replace(/\(.*?\)/g, '');
     // Keep only the first sentence/clause (stop at first punctuation)
-    const m2 = s.match(/^[^。；;.!?]+/);
+    const m2 = s.match(/^[^。；;.!?？]+/);
     if (m2) s = m2[0];
     return s.trim();
   };
