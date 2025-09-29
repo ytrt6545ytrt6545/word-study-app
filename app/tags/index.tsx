@@ -2,9 +2,11 @@ import { addTag, loadTags, removeTag, removeTags, renameTag, REVIEW_TAG } from "
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useI18n } from "@/i18n";
 
 export default function TagsManage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -21,7 +23,10 @@ export default function TagsManage() {
 
   const onAdd = async () => {
     const name = newTag.trim();
-    if (!name) { Alert.alert("請輸入標籤名稱"); return; }
+    if (!name) {
+      Alert.alert(t('tags.input.name'));
+      return;
+    }
     await addTag(name);
     setNewTag("");
     await refresh();
@@ -29,11 +34,11 @@ export default function TagsManage() {
 
   const onDelete = async (t: string) => {
     Alert.alert(
-      "刪除標籤",
-      `確定要刪除「${t}」這個標籤嗎？\n刪除後無法復原。`,
+      t('tags.confirmDelete.title'),
+      t('tags.confirmDelete.message', { tag: t }),
       [
-        { text: "取消" },
-        { text: "刪除", style: "destructive", onPress: async () => { await removeTag(t); await refresh(); } },
+        { text: t('common.cancel') },
+        { text: t('common.delete'), style: "destructive", onPress: async () => { await removeTag(t); await refresh(); } },
       ]
     );
   };
@@ -41,7 +46,8 @@ export default function TagsManage() {
   const onToggleSelect = (t: string) => {
     if (t === REVIEW_TAG) return;
     const next = new Set(selected);
-    if (next.has(t)) next.delete(t); else next.add(t);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
     setSelected(next);
   };
 
@@ -49,11 +55,11 @@ export default function TagsManage() {
     const list = Array.from(selected);
     if (list.length === 0) return;
     Alert.alert(
-      "批次刪除標籤",
-      `確定要刪除 ${list.length} 個標籤嗎？\n刪除後無法復原。`,
+      t('tags.bulkDelete.title'),
+      t('tags.bulkDelete.message', { count: list.length }),
       [
-        { text: "取消" },
-        { text: "刪除", style: "destructive", onPress: async () => { await removeTags(list); setSelected(new Set()); await refresh(); } },
+        { text: t('common.cancel') },
+        { text: t('common.delete'), style: "destructive", onPress: async () => { await removeTags(list); setSelected(new Set()); await refresh(); } },
       ]
     );
   };
@@ -64,7 +70,7 @@ export default function TagsManage() {
     const from = renaming || "";
     const to = renameText.trim();
     if (!from) return;
-    if (!to) { Alert.alert("請輸入新名稱"); return; }
+    if (!to) { Alert.alert(t('tags.rename.input')); return; }
     await renameTag(from, to);
     cancelRename();
     await refresh();
@@ -73,34 +79,27 @@ export default function TagsManage() {
   const viewTags = useMemo(() => {
     const q = search.trim();
     const filtered = q ? tags.filter((t) => t.toLowerCase().includes(q.toLowerCase())) : tags;
-    const sorted = [...filtered].sort((a, b) => asc ? a.localeCompare(b) : b.localeCompare(a));
+    const sorted = [...filtered].sort((a, b) => (asc ? a.localeCompare(b) : b.localeCompare(a)));
     return sorted;
   }, [tags, search, asc]);
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
-      <Text style={styles.title}>標籤管理</Text>
+      <Text style={styles.title}>{t('tags.manage.title')}</Text>
 
       <View style={styles.rowAdd}>
-        <Button title="新增標籤" onPress={onAdd} />
-        <TextInput
-          style={styles.input}
-          placeholder="輸入標籤名稱"
-          value={newTag}
-          onChangeText={setNewTag}
-          returnKeyType="done"
-          onSubmitEditing={onAdd}
-        />
+        <Button title={t('tags.add')} onPress={onAdd} />
+        <TextInput style={styles.input} placeholder={t('tags.input.name')} value={newTag} onChangeText={setNewTag} returnKeyType="done" onSubmitEditing={onAdd} />
       </View>
 
-      <Text style={styles.label}>標籤列表</Text>
+      <Text style={styles.label}>{t('tags.list')}</Text>
       <View style={styles.bulkRow}>
-        <Button title={`批次刪除 (${selected.size})`} onPress={onBulkDelete} disabled={selected.size === 0} color={selected.size === 0 ? undefined : "#c62828"} />
+        <Button title={t('tags.bulkDelete', { count: selected.size })} onPress={onBulkDelete} disabled={selected.size === 0} color={selected.size === 0 ? undefined : "#c62828"} />
       </View>
       <View style={styles.searchRow}>
-        <TextInput style={[styles.input, { flex: 1 }]} placeholder="搜尋標籤" value={search} onChangeText={setSearch} />
+        <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('tags.search')} value={search} onChangeText={setSearch} />
         <View style={{ width: 8 }} />
-        <Button title={asc ? "排序 A→Z" : "排序 Z→A"} onPress={() => setAsc((v) => !v)} />
+        <Button title={asc ? t('tags.sort.az') : t('tags.sort.za')} onPress={() => setAsc((v) => !v)} />
       </View>
       <View style={styles.tagsWrap}>
         {viewTags.map((t) => {
@@ -115,25 +114,25 @@ export default function TagsManage() {
               </Pressable>
               {isRenaming ? (
                 <>
-                  <TextInput style={[styles.input, { flex: 0, width: 140, marginRight: 6 }]} value={renameText} onChangeText={setRenameText} placeholder="輸入新名稱" />
-                  <Button title="確認" onPress={confirmRename} />
+                  <TextInput style={[styles.input, { flex: 0, width: 140, marginRight: 6 }]} value={renameText} onChangeText={setRenameText} placeholder={t('tags.rename.input')} />
+                  <Button title={t('tags.rename.ok')} onPress={confirmRename} />
                   <View style={{ width: 6 }} />
-                  <Button title="取消" onPress={cancelRename} />
+                  <Button title={t('tags.rename.cancel')} onPress={cancelRename} />
                 </>
               ) : (
                 <>
                   <View style={{ marginRight: 6 }}>
-                    <Button title={t + (t === REVIEW_TAG ? " (內建)" : "")} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} />
+                    <Button title={t + (t === REVIEW_TAG ? (t('tags.item.suggested') as string) : '')} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} />
                   </View>
-                  {t !== REVIEW_TAG && <Button title="改名" onPress={() => startRename(t)} />}
+                  {t !== REVIEW_TAG && <Button title={t('tags.item.rename')} onPress={() => startRename(t)} />}
                   <View style={{ width: 6 }} />
-                  {t !== REVIEW_TAG && <Button title="刪除" color="#c62828" onPress={() => onDelete(t)} />}
+                  {t !== REVIEW_TAG && <Button title={t('tags.item.delete')} color="#c62828" onPress={() => onDelete(t)} />}
                 </>
               )}
             </View>
           );
         })}
-        {tags.length === 0 && <Text style={styles.hint}>目前沒有標籤，請新增。</Text>}
+        {tags.length === 0 && <Text style={styles.hint}>{t('tags.none')}</Text>}
       </View>
     </ScrollView>
   );
@@ -146,12 +145,11 @@ const styles = StyleSheet.create({
   rowAdd: { flexDirection: "row", alignItems: "center", gap: 10 },
   input: { flex: 1, borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, backgroundColor: "#fff" },
   bulkRow: { marginBottom: 6 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  tagsWrap: { flexDirection: "row", flexWrap: 'wrap', gap: 10, alignItems: 'center' },
-  tagItem: { flexDirection: 'row', alignItems: 'center' },
-  chkbox: { width: 22, height: 22, borderWidth: 1, borderColor: '#777', marginRight: 6, borderRadius: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  chkboxChecked: { backgroundColor: '#1976d2', borderColor: '#1976d2' },
-  chkMark: { color: '#fff', fontWeight: 'bold' },
-  hint: { color: '#777' },
+  searchRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  tagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" },
+  tagItem: { flexDirection: "row", alignItems: "center" },
+  chkbox: { width: 22, height: 22, borderWidth: 1, borderColor: "#777", marginRight: 6, borderRadius: 4, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+  chkboxChecked: { backgroundColor: "#1976d2", borderColor: "#1976d2" },
+  chkMark: { color: "#fff", fontWeight: "bold" },
+  hint: { color: "#777" },
 });
-
