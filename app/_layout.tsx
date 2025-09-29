@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { TabMarkProvider } from '@/context/TabMarkContext';
+import { I18nProvider } from '@/i18n';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,13 +21,15 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <TabMarkProvider>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
-      </TabMarkProvider>
+      <I18nProvider>
+        <TabMarkProvider>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style="auto" />
+        </TabMarkProvider>
+      </I18nProvider>
     </ThemeProvider>
   );
 }
