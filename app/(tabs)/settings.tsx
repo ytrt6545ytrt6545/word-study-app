@@ -6,8 +6,11 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
 import { getSrsLimits, saveSrsLimits, getWordFontSize, saveWordFontSize } from "@/utils/storage";
+import { useI18n } from "@/i18n";
+import { Locale } from "@/i18n";
 
 export default function Settings() {
+  const { t, locale, setLocale } = useI18n();
   const [ratePercent, setRatePercent] = useState<number>(50);
   const [pitchPercent, setPitchPercent] = useState<number>(50);
   const [voices, setVoices] = useState<TtsVoice[]>([]);
@@ -85,11 +88,10 @@ export default function Settings() {
   const onSetZhRate = async (m: number) => {
     const next = await saveZhRate(m);
     setZhRate(next);
-    // 直接套用，不需按確認
   };
   const onPreviewVoice = async (lang: 'en' | 'zh') => {
     try { Speech.stop(); } catch {}
-    const text = lang === 'en' ? 'take an example' : '這是一個範例';
+    const text = lang === 'en' ? 'take an example' : '這是一段示例';
     const langCode = lang === 'en' ? 'en-US' : 'zh-TW';
     const opts = await getSpeechOptions(langCode);
     Speech.speak(text, { language: langCode, voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
@@ -98,23 +100,31 @@ export default function Settings() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={styles.title}>設置</Text>
+        <Text style={styles.title}>{t('settings.title')}</Text>
 
-        <Text style={styles.sectionTitle}>複習每日上限</Text>
+        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
         <View style={{ marginBottom: 12 }}>
-          <Text>{`新卡上限：${dailyNewLimit}`}</Text>
+          <Picker selectedValue={locale} onValueChange={(val) => setLocale(val as Locale)}>
+            <Picker.Item label={t('settings.language.zh')} value={'zh-TW'} />
+            <Picker.Item label={t('settings.language.en')} value={'en'} />
+          </Picker>
+        </View>
+
+        <Text style={styles.sectionTitle}>{t('settings.dailyLimit')}</Text>
+        <View style={{ marginBottom: 12 }}>
+          <Text>{t('settings.newLimit', { n: dailyNewLimit })}</Text>
           <Slider minimumValue={0} maximumValue={100} step={1} value={dailyNewLimit} onValueChange={setDailyNewLimit} onSlidingComplete={onCommitNewLimit} />
-          <Text>{`複習上限：${dailyReviewLimit}`}</Text>
+          <Text>{t('settings.reviewLimit', { n: dailyReviewLimit })}</Text>
           <Slider minimumValue={0} maximumValue={1000} step={10} value={dailyReviewLimit} onValueChange={setDailyReviewLimit} onSlidingComplete={onCommitReviewLimit} />
         </View>
 
-        <Text style={styles.sectionTitle}>語速與音調</Text>
+        <Text style={styles.sectionTitle}>{t('settings.rate')}</Text>
         <View style={{ marginBottom: 4 }}>
           <Slider minimumValue={0} maximumValue={100} step={1} value={ratePercent} onValueChange={setRatePercent} onSlidingComplete={onCommitRate} />
-          <Text style={styles.dim}>{`英文語速：${ratePercent}/100（中文語速見下方）`}</Text>
+          <Text style={styles.dim}>{t('settings.rate.hint', { n: ratePercent })}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>中文語速</Text>
+        <Text style={styles.sectionTitle}>{t('settings.zhRate')}</Text>
         <View style={styles.row}>
           {[1, 1.15, 1.25, 1.35, 1.45].map((m) => (
             <View key={m} style={{ marginRight: 6 }}>
@@ -123,26 +133,26 @@ export default function Settings() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>音調（越左越低、越右越高）</Text>
+        <Text style={styles.sectionTitle}>{t('settings.pitch')}</Text>
         <View style={{ marginBottom: 8 }}>
           <Slider minimumValue={0} maximumValue={100} step={1} value={pitchPercent} onValueChange={setPitchPercent} onSlidingComplete={onCommitPitch} />
-          <Text style={styles.dim}>{`音調：${pitchPercent}/100`}</Text>
+          <Text style={styles.dim}>{t('settings.pitch.hint', { n: pitchPercent })}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>單字字體大小（列表英文）</Text>
+        <Text style={styles.sectionTitle}>{t('settings.wordFont')}</Text>
         <View style={{ marginBottom: 8 }}>
-          <Text>{`目前：${wordFontSize}px`}</Text>
+          <Text>{t('settings.wordFont.value', { n: wordFontSize })}</Text>
           <Slider minimumValue={12} maximumValue={48} step={1} value={wordFontSize} onValueChange={setWordFontSize} onSlidingComplete={onCommitWordFont} />
         </View>
 
-        <Text style={styles.sectionTitle}>英文語音清單</Text>
+        <Text style={styles.sectionTitle}>{t('settings.enVoices')}</Text>
         {loadingVoices ? (
-          <Text style={styles.dim}>載入可用語音中...</Text>
+          <Text style={styles.dim}>{t('settings.loadingVoices')}</Text>
         ) : (
           <View style={styles.voiceList}>
             <View style={{ flex: 1 }}>
               <Picker selectedValue={voiceEn ?? ''} onValueChange={(val) => onPickVoice('en', val === '' ? null : String(val))}>
-                <Picker.Item label="系統預設" value="" />
+                <Picker.Item label={t('settings.systemDefault')} value="" />
                 {enVoices.map(v => (
                   <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
                 ))}
@@ -150,21 +160,21 @@ export default function Settings() {
             </View>
             <View style={styles.voiceRow}>
               <Text style={styles.voiceName} numberOfLines={1}>{currentEnName}</Text>
-              <Pressable onPress={() => onPreviewVoice('en')} accessibilityLabel="試聽英文語音" style={{ paddingHorizontal: 6 }}>
+              <Pressable onPress={() => onPreviewVoice('en')} accessibilityLabel={t('settings.previewEn')} style={{ paddingHorizontal: 6 }}>
                 <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
               </Pressable>
             </View>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>中文語音清單</Text>
+        <Text style={styles.sectionTitle}>{t('settings.zhVoices')}</Text>
         {loadingVoices ? (
-          <Text style={styles.dim}>載入可用語音中...</Text>
+          <Text style={styles.dim}>{t('settings.loadingVoices')}</Text>
         ) : (
           <View style={styles.voiceList}>
             <View style={{ flex: 1 }}>
               <Picker selectedValue={voiceZh ?? ''} onValueChange={(val) => onPickVoice('zh', val === '' ? null : String(val))}>
-                <Picker.Item label="系統預設" value="" />
+                <Picker.Item label={t('settings.systemDefault')} value="" />
                 {zhVoices.map(v => (
                   <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
                 ))}
@@ -172,7 +182,7 @@ export default function Settings() {
             </View>
             <View style={styles.voiceRow}>
               <Text style={styles.voiceName} numberOfLines={1}>{currentZhName}</Text>
-              <Pressable onPress={() => onPreviewVoice('zh')} accessibilityLabel="試聽中文語音" style={{ paddingHorizontal: 6 }}>
+              <Pressable onPress={() => onPreviewVoice('zh')} accessibilityLabel={t('settings.previewZh')} style={{ paddingHorizontal: 6 }}>
                 <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
               </Pressable>
             </View>
@@ -193,4 +203,3 @@ const styles = StyleSheet.create({
   voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: '#333' },
   dim: { color: '#666' },
 });
-
