@@ -7,18 +7,19 @@ import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWord
 import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
 import { useTabMark } from "@/context/TabMarkContext";
+import { useI18n } from "@/i18n";
 
 const SORT_PREF_KEY = "@word_sort_desc";
 
 export default function Words() {
   const router = useRouter();
   const { setMarkedTab } = useTabMark();
+  const { t } = useI18n();
   const [words, setWords] = useState<Word[]>([]);
   const [sortDesc, setSortDesc] = useState(true);
   const [search, setSearch] = useState("");
   const [wordFont, setWordFont] = useState<number>(18);
 
-  // Load persisted sort preference
   useEffect(() => {
     (async () => {
       try {
@@ -28,23 +29,24 @@ export default function Words() {
     })();
   }, []);
 
-  // Save sort preference
   useEffect(() => {
     AsyncStorage.setItem(SORT_PREF_KEY, sortDesc ? "1" : "0").catch(() => {});
   }, [sortDesc]);
 
-  useFocusEffect(useCallback(() => {
-    (async () => {
-      setWords(await loadWords());
-      setWordFont(await getWordFontSize());
-    })();
-  }, []));
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        setWords(await loadWords());
+        setWordFont(await getWordFontSize());
+      })();
+    }, [])
+  );
 
   const removeWord = (target: string) => {
-    Alert.alert("刪除單字", `確定要刪除「${target}」嗎？`, [
-      { text: "取消" },
+    Alert.alert(t('words.confirmDelete.title'), t('words.confirmDelete.message', { word: target }), [
+      { text: t('common.cancel') },
       {
-        text: "刪除",
+        text: t('common.delete'),
         style: "destructive",
         onPress: async () => {
           const next = (await loadWords()).filter((w) => w.en !== target);
@@ -54,6 +56,7 @@ export default function Words() {
       },
     ]);
   };
+
   const setStatus = async (en: string, status: WordStatus) => {
     const list = await loadWords();
     const next = list.map((w) => (w.en === en ? { ...w, status } : w));
@@ -61,7 +64,7 @@ export default function Words() {
     setWords(next);
   };
 
-  const nextStatus = (s: WordStatus): WordStatus => (s === 'unknown' ? 'learning' : s === 'learning' ? 'mastered' : 'unknown');
+  const nextStatus = (s: WordStatus): WordStatus => (s === "unknown" ? "learning" : s === "learning" ? "mastered" : "unknown");
 
   const data = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -86,8 +89,8 @@ export default function Words() {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "";
     const yy = String(d.getFullYear()).slice(-2);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
     return `${yy}/${mm}/${dd}`;
   };
 
@@ -95,9 +98,11 @@ export default function Words() {
     try {
       await bumpReview(en);
     } finally {
-      try { Speech.stop(); } catch {}
-      const opts = await getSpeechOptions('en-US');
-      Speech.speak(text, { language: 'en-US', voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
+      try {
+        Speech.stop();
+      } catch {}
+      const opts = await getSpeechOptions("en-US");
+      Speech.speak(text, { language: "en-US", voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
       setWords(await loadWords());
     }
   };
@@ -111,19 +116,17 @@ export default function Words() {
     <View style={styles.item}>
       {/* Top: word + translation */}
       <Pressable style={styles.topArea} onPress={() => onOpenDetail(item.en)}>
-        <Text style={[styles.itemEn, { fontSize: wordFont }]} numberOfLines={1} ellipsizeMode="tail">{item.en}</Text>
+        <Text style={[styles.itemEn, { fontSize: wordFont }]} numberOfLines={1} ellipsizeMode="tail">
+          {item.en}
+        </Text>
         <Text style={styles.itemZh}>{item.zh}</Text>
       </Pressable>
 
       {/* Middle: tags */}
-      {(item.tags && item.tags.length > 0) && (
+      {item.tags && item.tags.length > 0 && (
         <View style={styles.tagRow}>
           {item.tags!.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })}
-              style={[styles.tagPill, t === REVIEW_TAG && styles.tagPillReview]}
-            >
+            <Pressable key={t} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} style={[styles.tagPill, t === REVIEW_TAG && styles.tagPillReview]}>
               <Text style={[styles.tagPillText, t === REVIEW_TAG && styles.tagPillTextReview]}>{t}</Text>
             </Pressable>
           ))}
@@ -135,16 +138,16 @@ export default function Words() {
         <Text style={styles.metaLeft}>{formatYMD(item.createdAt)}</Text>
         <Text style={[styles.metaLeft, styles.reviewCount]}>{item.reviewCount || 0}</Text>
         <Pressable style={styles.statusBoxInline} onPress={() => setStatus(item.en, nextStatus(item.status))}>
-          <Text style={styles.tiny}>熟悉度</Text>
+          <Text style={styles.tiny}>{t('words.familiarity')}</Text>
           <View style={styles.pillRow}>
-            <View style={[styles.dot, item.status === 'unknown'  && styles.dotRed]} />
-            <View style={[styles.dot, item.status === 'learning' && styles.dotYellow]} />
-            <View style={[styles.dot, item.status === 'mastered' && styles.dotGreen]} />
+            <View style={[styles.dot, item.status === "unknown" && styles.dotRed]} />
+            <View style={[styles.dot, item.status === "learning" && styles.dotYellow]} />
+            <View style={[styles.dot, item.status === "mastered" && styles.dotGreen]} />
           </View>
         </Pressable>
-        <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Button title="讀" onPress={() => onSpeak(item.en, item.en)} />
-          <Button title="刪除" color="#c62828" onPress={() => removeWord(item.en)} />
+        <View style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Button title={t('words.read')} onPress={() => onSpeak(item.en, item.en)} />
+          <Button title={t('words.delete')} color="#c62828" onPress={() => removeWord(item.en)} />
         </View>
       </View>
     </View>
@@ -152,28 +155,29 @@ export default function Words() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>單字列表</Text>
+      <Text style={styles.title}>{t('words.title')}</Text>
       <TextInput
         style={styles.searchInput}
-        placeholder={"輸入單字/翻譯/標籤"}
+        placeholder={t('words.search.placeholder')}
         value={search}
         onChangeText={setSearch}
         returnKeyType="search"
       />
       <View style={styles.addRow}>
-        <Button title={"新增單字"} onPress={() => { setMarkedTab('explore'); router.push('/(tabs)/explore'); }} />
+        <Button
+          title={t('words.add')}
+          onPress={() => {
+            setMarkedTab("explore");
+            router.push("/(tabs)/explore");
+          }}
+        />
         <View style={{ width: 10 }} />
-        <Button title={"進入閱讀"} onPress={() => router.push('/(tabs)/reading')} />
+        <Button title={t('words.import')} onPress={() => router.push("/(tabs)/reading")} />
       </View>
       <View style={styles.sortRow}>
-        <Button title={sortDesc ? "最新在上" : "最舊在上"} onPress={() => setSortDesc((v) => !v)} />
+        <Button title={sortDesc ? t('words.sort.new2old') : t('words.sort.old2new')} onPress={() => setSortDesc((v) => !v)} />
       </View>
-      <FlatList
-        data={data}
-        keyExtractor={(item, idx) => item.en + idx}
-        renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-      />
+      <FlatList data={data} keyExtractor={(item, idx) => item.en + idx} renderItem={renderItem} ItemSeparatorComponent={() => <View style={{ height: 10 }} />} />
     </View>
   );
 }
@@ -182,29 +186,25 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
   searchInput: { width: "100%", borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, backgroundColor: "#fff", marginBottom: 8 },
-  addRow: { marginBottom: 8, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sortRow: { marginBottom: 8, alignSelf: 'flex-start' },
+  addRow: { marginBottom: 8, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10 },
+  sortRow: { marginBottom: 8, alignSelf: "flex-start" },
   item: { padding: 12, backgroundColor: "#f5f7fb", borderRadius: 12 },
   topArea: { marginBottom: 8 },
   itemEn: { fontSize: 18, fontWeight: "bold" },
   itemZh: { fontSize: 16 },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 10 },
-  metaLeft: { fontSize: 11, color: '#666' },
-  reviewCount: { color: '#c62828' },
-  tiny: { fontSize: 12, color: '#666', marginBottom: 4 },
-  statusBoxInline: { alignItems: 'center' },
-  pillRow: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 14, height: 14, borderRadius: 7, marginHorizontal: 3, backgroundColor: '#ddd', borderWidth: 1, borderColor: '#bbb' },
-  dotRed: { backgroundColor: '#f44336' },
-  dotYellow: { backgroundColor: '#ffb300' },
-  dotGreen: { backgroundColor: '#43a047' },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  tagPill: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#eceff1', borderRadius: 12, borderWidth: 1, borderColor: '#cfd8dc' },
-  tagPillReview: { backgroundColor: '#e3f2fd', borderColor: '#90caf9' },
-  tagPillText: { fontSize: 12, color: '#37474f' },
-  tagPillTextReview: { color: '#1565c0' },
+  bottomRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, marginTop: 10 },
+  metaLeft: { fontSize: 11, color: "#666" },
+  reviewCount: { color: "#c62828" },
+  tiny: { fontSize: 12, color: "#666", marginBottom: 4 },
+  statusBoxInline: { alignItems: "center" },
+  pillRow: { flexDirection: "row", alignItems: "center" },
+  dot: { width: 14, height: 14, borderRadius: 7, marginHorizontal: 3, backgroundColor: "#ddd", borderWidth: 1, borderColor: "#bbb" },
+  dotRed: { backgroundColor: "#f44336" },
+  dotYellow: { backgroundColor: "#ffb300" },
+  dotGreen: { backgroundColor: "#43a047" },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  tagPill: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#eceff1", borderRadius: 12, borderWidth: 1, borderColor: "#cfd8dc" },
+  tagPillReview: { backgroundColor: "#e3f2fd", borderColor: "#90caf9" },
+  tagPillText: { fontSize: 12, color: "#37474f" },
+  tagPillTextReview: { color: "#1565c0" },
 });
-
-
-
-
