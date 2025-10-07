@@ -137,11 +137,15 @@ export async function aiCompleteWord(input: { en?: string; zh?: string }): Promi
     return s.trim();
   };
 
+  // Key normalization: accept common variants from models
+  const normEn = (parsed as any).en ?? (parsed as any).word ?? (parsed as any).term;
+  const normZh = (parsed as any).zh ?? (parsed as any).cn ?? (parsed as any).chinese;
+  const normExEn = (parsed as any).exampleEn ?? (parsed as any).example_en ?? (parsed as any).example;
+  const normExZh = (parsed as any).exampleZh ?? (parsed as any).example_zh ?? (parsed as any).exampleCn ?? (parsed as any).example_cn;
   return {
-    en: parsed.en?.trim(),
-    zh: sanitizeZh(parsed.zh),
-    exampleEn: parsed.exampleEn?.trim(),
-    exampleZh: parsed.exampleZh?.trim(),
+    en: typeof normEn === 'string' ? normEn.trim() : undefined,
+    zh: typeof normZh === 'string' ? sanitizeZh(normZh) : undefined,
+    exampleEn: typeof normExEn === 'string' ? normExEn.trim() : undefined,
+    exampleZh: typeof normExZh === 'string' ? (normExZh as string).trim() : undefined,
   };
 }
-
