@@ -10,6 +10,8 @@ const KEY_PITCH_PERCENT = "@tts_pitch_percent"; // 0-100 for pitch (left=male, r
 const KEY_VOICE_EN = "@tts_voice_en";
 const KEY_VOICE_ZH = "@tts_voice_zh";
 const KEY_RATE_ZH = "@tts_rate_zh"; // zh rate multiplier (1.0 = normal)
+const KEY_PAUSE_COMMA_MS = "@tts_pause_comma_ms"; // reading pause at comma
+const KEY_PAUSE_SENT_MS = "@tts_pause_sentence_ms"; // reading pause at sentence end
 
 export async function loadSpeechSettings(): Promise<{ ratePercent: number; gender: VoiceGender }> {
   const [percentRaw, genderRaw] = await Promise.all([
@@ -120,6 +122,36 @@ export async function getSpeechOptions(language?: string): Promise<{ language?: 
   const pitchPercent = await loadPitchPercent();
   const pitch = mapPitchFromPercent(pitchPercent);
   return { language, rate, pitch, voice };
+}
+
+// Reading pauses (web/reading screen)
+export async function loadPauseConfig(): Promise<{ commaMs: number; sentenceMs: number }> {
+  try {
+    const [cRaw, sRaw] = await Promise.all([
+      AsyncStorage.getItem(KEY_PAUSE_COMMA_MS),
+      AsyncStorage.getItem(KEY_PAUSE_SENT_MS),
+    ]);
+    let comma = Number(cRaw ?? 120);
+    let sent = Number(sRaw ?? 220);
+    if (isNaN(comma)) comma = 120;
+    if (isNaN(sent)) sent = 220;
+    comma = Math.max(80, Math.min(200, Math.round(comma)));
+    sent = Math.max(150, Math.min(400, Math.round(sent)));
+    return { commaMs: comma, sentenceMs: sent };
+  } catch {
+    return { commaMs: 120, sentenceMs: 220 };
+  }
+}
+
+export async function savePauseConfig(cfg: Partial<{ commaMs: number; sentenceMs: number }>): Promise<{ commaMs: number; sentenceMs: number }> {
+  const cur = await loadPauseConfig();
+  let comma = Math.max(80, Math.min(200, Math.round(Number(cfg.commaMs ?? cur.commaMs))));
+  let sent = Math.max(150, Math.min(400, Math.round(Number(cfg.sentenceMs ?? cur.sentenceMs))));
+  await Promise.all([
+    AsyncStorage.setItem(KEY_PAUSE_COMMA_MS, String(comma)),
+    AsyncStorage.setItem(KEY_PAUSE_SENT_MS, String(sent)),
+  ]);
+  return { commaMs: comma, sentenceMs: sent };
 }
 
 
