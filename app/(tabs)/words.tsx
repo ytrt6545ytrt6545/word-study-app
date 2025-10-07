@@ -125,9 +125,9 @@ export default function Words() {
       {/* Middle: tags */}
       {item.tags && item.tags.length > 0 && (
         <View style={styles.tagRow}>
-          {item.tags!.map((t) => (
-            <Pressable key={t} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} style={[styles.tagPill, t === REVIEW_TAG && styles.tagPillReview]}>
-              <Text style={[styles.tagPillText, t === REVIEW_TAG && styles.tagPillTextReview]}>{t}</Text>
+          {item.tags!.map((tagName) => (
+            <Pressable key={tagName} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: tagName } })} style={[styles.tagPill, tagName === REVIEW_TAG && styles.tagPillReview]}>
+              <Text style={[styles.tagPillText, tagName === REVIEW_TAG && styles.tagPillTextReview]}>{tagName}</Text>
             </Pressable>
           ))}
         </View>
@@ -167,8 +167,7 @@ export default function Words() {
         <Button
           title={t('words.add')}
           onPress={() => {
-            setMarkedTab("explore");
-            router.push("/(tabs)/explore");
+            router.push("/add");
           }}
         />
         <View style={{ width: 10 }} />
