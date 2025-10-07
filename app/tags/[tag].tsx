@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert, Button, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWordFontSize } from "@/utils/storage";
+import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWordFontSize, pathStartsWith } from "@/utils/storage";
 import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
 import { useTabMark } from "@/context/TabMarkContext";
@@ -16,17 +16,22 @@ export default function TagWords() {
 
   const [words, setWords] = useState<Word[]>([]);
   const [sortDesc, setSortDesc] = useState(true);
+  const [includeChildren, setIncludeChildren] = useState(false);
   const [wordFont, setWordFont] = useState<number>(18);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
         const list = await loadWords();
-        const filtered = list.filter((w) => (w.tags || []).includes(tag));
+        const filtered = list.filter((w) => {
+          const wt = Array.isArray(w.tags) ? w.tags : [];
+          if (!includeChildren) return wt.includes(tag);
+          return wt.some((t) => pathStartsWith(t, tag));
+        });
         setWords(filtered);
         setWordFont(await getWordFontSize());
       })();
-    }, [tag])
+    }, [tag, includeChildren])
   );
 
   const removeWord = (target: string) => {
@@ -103,9 +108,9 @@ export default function TagWords() {
       </Pressable>
       {item.tags && item.tags.length > 0 && (
         <View style={styles.tagRow}>
-          {item.tags!.map((t) => (
-            <Pressable key={t} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: t } })} style={[styles.tagPill, t === REVIEW_TAG && styles.tagPillReview]}>
-              <Text style={[styles.tagPillText, t === REVIEW_TAG && styles.tagPillTextReview]}>{t}</Text>
+          {item.tags!.map((tagName) => (
+            <Pressable key={tagName} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: tagName } })} style={[styles.tagPill, tagName === REVIEW_TAG && styles.tagPillReview]}>
+              <Text style={[styles.tagPillText, tagName === REVIEW_TAG && styles.tagPillTextReview]}>{tagName}</Text>
             </Pressable>
           ))}
         </View>
@@ -132,6 +137,9 @@ export default function TagWords() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{t('tags.page.title', { tag })}</Text>
+      <View style={styles.addRow}>
+        <Button title={includeChildren ? '包含子標籤：開' : '包含子標籤：關'} onPress={() => setIncludeChildren((v) => !v)} />
+      </View>
       <View style={styles.addRow}>
         <View style={{ marginRight: 8 }}>
           <Button title={t('tags.addWord')} onPress={() => { setMarkedTab("explore"); router.push({ pathname: "/(tabs)/explore", params: { tag } }); }} />
