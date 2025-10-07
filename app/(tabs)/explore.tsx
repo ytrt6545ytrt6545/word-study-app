@@ -20,6 +20,8 @@ export default function Explore() {
   const [exEn, setExEn] = useState("");
   const [exZh, setExZh] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiNote, setAiNote] = useState<string>("");
+  const [aiRaw, setAiRaw] = useState<string>("");
   const [zhHeight, setZhHeight] = useState(40);
   const [exEnHeight, setExEnHeight] = useState(40);
   const [exZhHeight, setExZhHeight] = useState(40);
@@ -44,6 +46,8 @@ export default function Explore() {
     setZh("");
     setExEn("");
     setExZh("");
+    setAiNote("");
+    setAiRaw("");
     setZhHeight(40);
     setExEnHeight(40);
     setExZhHeight(40);
@@ -86,18 +90,53 @@ export default function Explore() {
     }
     try {
       setAiLoading(true);
+      try { setAiNote("AI: 呼叫中..."); } catch {}
+      // 診斷：紀錄呼叫前的狀態與金鑰是否存在（不輸出金鑰值）
+      try {
+        // 在 web 環境變數會於編譯時靜態替換
+        const hasKey = !!(process as any)?.env?.EXPO_PUBLIC_OPENAI_API_KEY;
+        // iOS/Android/Expo Web 皆可在 console 看見
+        // eslint-disable-next-line no-console
+        console.log('[Explore] AI call start', { onlyEn, onlyZh, hasKey, en: _en, zh: _zh });
+      } catch {}
+
+      const prev = { en, zh, exEn, exZh };
       const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
-      // 只要有回傳就覆寫欄位
+      try { setAiRaw(JSON.stringify(res, null, 2)); } catch { setAiRaw(String(res)); }
+      // 診斷：輸出原始回傳
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[Explore] AI response', res);
+      } catch {}
+
+      // 只要有回傳就覆寫欄位，並記錄實際變動欄位供診斷顯示
+      const changed: string[] = [];
       if (res.en !== undefined) setEn(res.en || "");
+      if (res.en !== undefined && (res.en || "") !== prev.en) changed.push('en');
       if (res.zh !== undefined) setZh(res.zh || "");
+      if (res.zh !== undefined && (res.zh || "") !== prev.zh) changed.push('zh');
       if (res.exampleEn !== undefined) setExEn(res.exampleEn || "");
+      if (res.exampleEn !== undefined && (res.exampleEn || "") !== prev.exEn) changed.push('exampleEn');
       if (res.exampleZh !== undefined) setExZh(res.exampleZh || "");
+      if (res.exampleZh !== undefined && (res.exampleZh || "") !== prev.exZh) changed.push('exampleZh');
+
+      // 若沒有任何變動，彈出簡易診斷，避免使用者以為無作用
+      if (changed.length === 0) {
+        const raw = (() => { try { return JSON.stringify(res).slice(0, 400); } catch { return '[unserializable]'; } })();
+        setAiNote('AI: 已回應，但沒有可填入的欄位變動');
+        Alert.alert('診斷', `AI 已回應，但沒有可填入的欄位變動。\n回傳片段：${raw}`);
+      } else {
+        try { setAiNote(`AI: 已更新 -> ${changed.join(', ')}`); } catch {}
+      }
 
       // 念英文單字兩次，優先用 AI 產出，否則用輸入
       const speakText = (res.en || _en || "").toString();
       if (speakText) await speakWordTwice(speakText);
     } catch (e: any) {
+      // 診斷：錯誤輸出於 console
+      try { console.error('[Explore] AI error', e); } catch {}
       Alert.alert(t('explore.ai.failed'), e?.message ?? '');
+      try { setAiNote(`AI: 失敗 ${e?.message || ''}`); } catch {}
     } finally {
       setAiLoading(false);
     }
@@ -165,7 +204,20 @@ export default function Explore() {
           <Button title={aiLoading ? t('explore.ai.loading') : t('explore.ai')} onPress={onAIFill} disabled={aiLoading} />
           {aiLoading && <ActivityIndicator style={{ marginLeft: 8 }} />}
         </View>
+        {!!aiNote && <Text style={{ color: '#666', marginBottom: 8 }}>{aiNote}</Text>}
         <Button title={t('explore.add')} onPress={addWord} />
+        {/* AI 回應原始內容（唯讀） */}
+        <View style={{ marginTop: 10 }}>
+          <Text style={{ marginBottom: 6, color: '#333', fontWeight: 'bold' }}>AI 回應</Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline, { height: Math.max(100, Math.min(260, (aiRaw.split('\n').length + 1) * 18)) }]}
+            value={aiRaw}
+            multiline
+            editable={false}
+            scrollEnabled
+            placeholder={"按下 AI 補齊後，這裡會顯示原始回應 JSON"}
+          />
+        </View>
         {defaultTag ? (
           <View style={{ marginTop: 10 }}>
             <Button title={t('explore.backToTag')} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: defaultTag } })} />
