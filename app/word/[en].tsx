@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Speech from "expo-speech";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { bumpReview, loadWords, saveWords, Word, WordStatus, loadTags, toggleWordTag } from "../../utils/storage";
+import { bumpReview, loadWords, saveWords, Word, WordStatus, loadTags, toggleWordTag, buildOrderedTagTree, addTag, EXAM_TAG } from "../../utils/storage";
 import { getSpeechOptions } from "../../utils/tts";
 import { useI18n } from "@/i18n";
 
@@ -23,6 +23,9 @@ export default function WordDetail() {
   const [listening, setListening] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [newTagText, setNewTagText] = useState("");
+  const [tagTree, setTagTree] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -73,6 +76,42 @@ export default function WordDetail() {
     await toggleWordTag(word.en, tag, enabled);
     await refreshWordFromStorage();
   };
+  const toggleExpand = (path: string) => {
+    const next = new Set(expanded);
+    if (next.has(path)) next.delete(path); else next.add(path);
+    setExpanded(next);
+  };
+  useEffect(() => { (async () => setTagTree(await buildOrderedTagTree(tags)))(); }, [tags]);
+  const renderTagTree = (nodes: any[], depth = 0) => (
+    <>
+      {nodes.map((node) => {
+        const hasChildren = (node.children && node.children.length > 0) || false;
+        const isOpen = expanded.has(node.path);
+        const checked = (word?.tags || []).includes(node.path);
+        return (
+          <View key={node.path} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+            <Text style={{ width: depth * 14 }} />
+            {hasChildren ? (
+              <Pressable onPress={() => toggleExpand(node.path)}>
+                <Text style={{ width: 18, textAlign: 'center', color: '#555' }}>{isOpen ? '▾' : '▸'}</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ width: 18 }} />
+            )}
+            <Pressable onPress={() => onToggleTag(node.path, !checked)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.checkbox, checked && styles.checkboxChecked]} />
+              <Text style={styles.tagText}>{node.name}</Text>
+            </Pressable>
+            {hasChildren && isOpen && (
+              <View style={{ width: '100%' }}>
+                {renderTagTree(node.children || [], depth + 1)}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </>
+  );
 
   const speakOnce = async (text: string, language?: string) => {
     const opts = await getSpeechOptions(language);
@@ -161,6 +200,13 @@ export default function WordDetail() {
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
       <Text style={styles.title}>{word.en}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -6, marginBottom: 6 }}>
+        { (word.tags || []).includes(EXAM_TAG) ? (
+          <Button title={'移除考試標籤'} onPress={() => onToggleTag(EXAM_TAG, false)} />
+        ) : (
+          <Button title={'加入考試標籤'} onPress={() => onToggleTag(EXAM_TAG, true)} />
+        ) }
+      </View>
       <View style={styles.metaRow}>
         <Text style={styles.metaText}>{t('word.createdAt', { date: formatYMD(word.createdAt) })}</Text>
         <Text style={styles.metaTextStrong}>{t('word.reviewCount', { count: (word.reviewCount || 0).toString() })}</Text>
@@ -213,16 +259,22 @@ export default function WordDetail() {
       </Pressable>
       {tagsExpanded && (
         <View style={styles.tagsList}>
-          {tags.map((t) => {
-            const checked = (word.tags || []).includes(t);
-            return (
-              <Pressable key={t} style={styles.tagRow} onPress={() => onToggleTag(t, !checked)}>
-                <View style={[styles.checkbox, checked && styles.checkboxChecked]} />
-                <Text style={styles.tagText}>{t}</Text>
-              </Pressable>
-            );
-          })}
-          {tags.length === 0 && <Text style={styles.hint}>{t('word.tags.none')}</Text>}
+          {renderTagTree(tagTree)}
+          {tagTree.length === 0 && <Text style={styles.hint}>{t('word.tags.none')}</Text>}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+            <TextInput style={[styles.input, { flex: 1, marginRight: 6 }]} value={newTagText} onChangeText={setNewTagText} placeholder={'輸入新標籤（可含層級，如 A > B > C）'} />
+            <Button title={'新增並勾選'} onPress={async () => {
+              const name = newTagText.trim();
+              if (!name || !word) return;
+              await addTag(name);
+              await toggleWordTag(word.en, name, true);
+              setNewTagText("");
+              const list = await loadWords();
+              const found = list.find((w) => w.en.toLowerCase() === word.en.toLowerCase());
+              if (found) setWord(found);
+              setTags(await loadTags());
+            }} />
+          </View>
         </View>
       )}
 
