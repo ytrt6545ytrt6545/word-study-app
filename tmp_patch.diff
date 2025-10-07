@@ -1,0 +1,15 @@
+*** Begin Patch
+*** Update File: app/(tabs)/reading.tsx
+@@
+-      <View style={styles.toolbar}>
+-        <Button title={t('reading.toolbar.clear')} onPress={() => { setRawText(''); setSelectedKey(null); setSelectedWord(''); setLookupState(null); }} />
+-        <View style={{ width: 12 }} />
+-        <Button title={'®ÔÅª'} onPress={onStartReading} disabled={isReading && !isPaused} />
++      <View style={styles.toolbar}>
++        <Button title={'®ÔÅª'} onPress={onStartReading} disabled={isReading && !isPaused} />
+         <View style={{ width: 8 }} />
+         <Button title={'¼È°±'} onPress={onPauseReading} disabled={!isReading || isPaused} />
+         <View style={{ width: 8 }} />
+         <Button title={'Ä~Äò'} onPress={onResumeReading} disabled={!isReading || !isPaused} />
+       </View>
+*** End Patch
