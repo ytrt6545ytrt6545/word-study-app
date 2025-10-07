@@ -126,7 +126,7 @@ export default function Settings() {
 
         <Text style={styles.sectionTitle}>{t('settings.zhRate')}</Text>
         <View style={styles.row}>
-          {[1, 1.15, 1.25, 1.35, 1.45].map((m) => (
+          {[1, 1.15, 1.25, 1.35].map((m) => (
             <View key={m} style={{ marginRight: 6 }}>
               <Button title={`${zhRate === m ? '✓ ' : ''}${m}X`} onPress={() => onSetZhRate(m)} />
             </View>
