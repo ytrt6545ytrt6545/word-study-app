@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Button, Pressable, StyleSheet, Text, View, Platform } from "react-native";
 import * as Speech from "expo-speech";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { REVIEW_TAG, bumpReview, loadWords, toggleWordTag, Word, srsAnswer, getDailyStats, bumpDailyStats, getSrsLimits } from "@/utils/storage";
@@ -266,25 +266,40 @@ export default function ReviewScreen() {
   const onRemoveReviewTag = useCallback(() => {
     if (!quiz) return;
     const current = quiz;
+    const rawTag = (tagParam || REVIEW_TAG).toString();
+    const targetTag = rawTag.trim();
+    const doRemove = async () => {
+      try {
+        await toggleWordTag(current.en, targetTag, false);
+        const targetLc = targetTag.toLowerCase();
+        setAllWords((prev) => prev.map((w) => w.en.toLowerCase() === current.en.toLowerCase()
+          ? { ...w, tags: (w.tags || []).filter((tg) => ((tg || '').trim()).toLowerCase() !== targetLc) }
+          : w
+        ));
+        queueRef.current = queueRef.current.filter((w) => w.en !== current.en);
+        advanceToNext();
+      } catch (err: any) {
+        Alert.alert('移除失敗', err?.message || '請稍後再試');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // 在 Web 上直接執行，避免 Alert 確認造成使用者感覺「沒有動作」
+      doRemove();
+      return;
+    }
+
     Alert.alert(
-      "\u79fb\u51fa\u8907\u7fd2",
-      `\u78ba\u5b9a\u8981\u5c07 ${current.en} \u5f9e\u8907\u7fd2\u6e05\u55ae\u79fb\u9664\u55ce\uff1f`,
+      targetTag === REVIEW_TAG ? '移出複習' : '移出標籤',
+      targetTag === REVIEW_TAG
+        ? `確定要將 ${current.en} 從複習清單移除嗎？`
+        : `確定要將 ${current.en} 從標籤「${targetTag}」移除嗎？`,
       [
         { text: "\u53d6\u6d88", style: 'cancel' },
-        {
-          text: "\u79fb\u9664",
-          style: 'destructive',
-          onPress: async () => {
-            await toggleWordTag(current.en, REVIEW_TAG, false);
-            const latest = await loadWords();
-            setAllWords(latest);
-            queueRef.current = queueRef.current.filter((w) => w.en !== current.en);
-            advanceToNext();
-          },
-        },
+        { text: "\u79fb\u9664", style: 'destructive', onPress: doRemove },
       ],
     );
-  }, [quiz, advanceToNext]);
+  }, [quiz, advanceToNext, tagParam]);
 
   const now = Date.now();
   const dueCount = candidates.filter((w) => w.srsDue && Date.parse(w.srsDue) <= now).length;
@@ -401,7 +416,7 @@ export default function ReviewScreen() {
             <View style={{ width: 8 }} />
             <Button title={t('review.next')} onPress={nextQuiz} disabled={selected == null} />
             <View style={{ width: 8 }} />
-            <Button title={t('review.removeReviewTag')} onPress={onRemoveReviewTag} />
+            <Button title={tagParam ? `太熟了，移除標籤（${tagParam}）` : t('review.removeReviewTag')} onPress={onRemoveReviewTag} />
           </View>
         </>
       )}
