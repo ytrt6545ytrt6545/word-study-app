@@ -1,8 +1,129 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { defaultSrs, SrsState, updateSrs } from "./srs";
 
+// ---- Hierarchical tag helpers (path string, max 3 levels) ----
+export const TAG_DELIM = ">"; // display as: A > B > C
+
+export type TagNode = {
+  name: string;
+  path: string; // normalized full path, e.g., "A > B"
+  children?: TagNode[];
+};
+
+export function parseTagPath(input: string): string[] {
+  const raw = (input || "").trim();
+  if (!raw) return [];
+  return raw.split(TAG_DELIM).map((s) => s.trim()).filter(Boolean);
+}
+
+export function joinTagPath(parts: string[]): string {
+  return parts.join(` ${TAG_DELIM} `);
+}
+
+export function isValidTagSegment(seg: string): boolean {
+  if (!seg) return false;
+  return !seg.includes(TAG_DELIM);
+}
+
+export function normalizeTagPath(path: string): string | null {
+  const parts = parseTagPath(path);
+  if (parts.length === 0) return null;
+  if (parts.length > 3) return null;
+  for (const p of parts) if (!isValidTagSegment(p)) return null;
+  return joinTagPath(parts);
+}
+
+export function pathStartsWith(childPath: string, parentPath: string): boolean {
+  const c = normalizeTagPath(childPath);
+  const p = normalizeTagPath(parentPath);
+  if (!c || !p) return false;
+  if (c === p) return true;
+  return c.startsWith(p + ` ${TAG_DELIM} `);
+}
+
+export function buildTagTree(paths: string[]): TagNode[] {
+  const root: Map<string, any> = new Map();
+  for (const raw of paths) {
+    // System tags are kept flat; skip in tree
+    if (raw === REVIEW_TAG || raw === EXAM_TAG) continue;
+    const norm = normalizeTagPath(raw);
+    if (!norm) continue;
+    const parts = parseTagPath(norm);
+    let cur = root;
+    let acc: string[] = [];
+    for (const part of parts) {
+      acc.push(part);
+      const key = part;
+      if (!cur.has(key)) cur.set(key, { __path: joinTagPath(acc), __children: new Map() });
+      cur = cur.get(key).__children;
+    }
+  }
+  const toNodes = (m: Map<string, any>): TagNode[] =>
+    Array.from(m.entries())
+      .map(([name, val]) => ({ name, path: val.__path, children: toNodes(val.__children) }));
+  return toNodes(root);
+}
+
+// ----- Tag order persistence (for sibling order & drag-move) -----
+const TAG_ORDER_KEY = "@halo_tag_order";
+export type TagOrder = Record<string, string[]>; // parentPath("") -> [childName, ...]
+
+export async function loadTagOrder(): Promise<TagOrder> {
+  try {
+    const raw = await AsyncStorage.getItem(TAG_ORDER_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object') return obj as TagOrder;
+  } catch {}
+  return {};
+}
+export async function saveTagOrder(order: TagOrder): Promise<void> {
+  await AsyncStorage.setItem(TAG_ORDER_KEY, JSON.stringify(order));
+}
+
+function parentOf(path: string): string {
+  const parts = parseTagPath(path);
+  if (parts.length <= 1) return "";
+  return joinTagPath(parts.slice(0, parts.length - 1));
+}
+function nameOf(path: string): string {
+  const parts = parseTagPath(path);
+  return parts[parts.length - 1] || "";
+}
+
+function sortByOrder(children: TagNode[] | undefined, parentPath: string, order: TagOrder): TagNode[] | undefined {
+  if (!children || children.length === 0) return children;
+  const rule = order[parentPath] || [];
+  const idx = new Map<string, number>();
+  rule.forEach((n, i) => idx.set(n, i));
+  const named = [...children];
+  named.sort((a, b) => {
+    const ia = idx.has(a.name) ? (idx.get(a.name) as number) : Number.MAX_SAFE_INTEGER;
+    const ib = idx.has(b.name) ? (idx.get(b.name) as number) : Number.MAX_SAFE_INTEGER;
+    if (ia !== ib) return ia - ib;
+    return a.name.localeCompare(b.name);
+  });
+  return named;
+}
+
+export function applyOrderToTree(nodes: TagNode[], parentPath: string, order: TagOrder): TagNode[] {
+  const sorted = sortByOrder(nodes, parentPath, order) || [];
+  return sorted.map((node) => ({
+    ...node,
+    children: applyOrderToTree(node.children || [], node.path, order),
+  }));
+}
+
+export async function buildOrderedTagTree(paths: string[]): Promise<TagNode[]> {
+  const tree = buildTagTree(paths);
+  const order = await loadTagOrder();
+  return applyOrderToTree(tree, "", order);
+}
+
 // System-reserved tag name for review (avoid deletion/rename)
 export const REVIEW_TAG = "\u8907\u7fd2"; // 複習
+export const EXAM_TAG = "\\u8003\\u8a66"; // 考試
+const SYSTEM_TAGS = new Set([REVIEW_TAG, EXAM_TAG]);
 const LEGACY_REVIEW_TAGS = new Set([REVIEW_TAG]);
 
 export type WordStatus = "unknown" | "learning" | "mastered";
@@ -100,27 +221,40 @@ export async function bumpReview(en: string, windowMs = 120_000): Promise<Word |
 // Tags storage
 export async function loadTags(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(TAGS_KEY);
-  if (!raw) return [REVIEW_TAG];
+  if (!raw) return [REVIEW_TAG, EXAM_TAG];
   try {
     const arr = JSON.parse(raw);
     if (Array.isArray(arr)) {
-      const set = new Set(
-        arr
-          .filter((t: any) => typeof t === "string")
-          .map((t: string) => (t || "").trim())
-          .filter(Boolean)
-          .map((t: string) => (LEGACY_REVIEW_TAGS.has(t) ? REVIEW_TAG : t))
-      );
+      const set = new Set<string>();
+      for (const it of arr) {
+        if (typeof it !== "string") continue;
+        const cleaned = (it || "").trim();
+        if (!cleaned) continue;
+        const mapped = LEGACY_REVIEW_TAGS.has(cleaned) ? REVIEW_TAG : cleaned;
+        if (mapped === REVIEW_TAG || mapped === EXAM_TAG) { set.add(mapped); continue; }
+        const norm = normalizeTagPath(mapped);
+        if (norm) set.add(norm);
+      }
       set.add(REVIEW_TAG);
+      set.add(EXAM_TAG);
       return Array.from(set);
     }
   } catch {}
-  return [REVIEW_TAG];
+  return [REVIEW_TAG, EXAM_TAG];
 }
 
 export async function saveTags(tags: string[]) {
-  const normSet = new Set(tags.map((t) => (t || "").trim()).filter(Boolean));
+  const normSet = new Set<string>();
+  for (const t of tags) {
+    const cleaned = (t || "").trim();
+    if (!cleaned) continue;
+    if (SYSTEM_TAGS.has(cleaned)) { normSet.add(cleaned); continue; }
+    const norm = normalizeTagPath(cleaned);
+    if (norm) normSet.add(norm);
+  }
+  // ensure system tags always present
   normSet.add(REVIEW_TAG);
+  normSet.add(EXAM_TAG);
   const norm = Array.from(normSet);
   await AsyncStorage.setItem(TAGS_KEY, JSON.stringify(norm));
 }
@@ -128,19 +262,38 @@ export async function saveTags(tags: string[]) {
 export async function addTag(tag: string): Promise<string[]> {
   const name = (tag || "").trim();
   if (!name) return loadTags();
+  if (SYSTEM_TAGS.has(name)) return loadTags();
+  const norm = normalizeTagPath(name);
+  if (!norm) return loadTags();
   const list = await loadTags();
-  if (!list.includes(name)) {
-    list.push(name);
-    await saveTags(list);
+  const set = new Set(list);
+  const parts = parseTagPath(norm);
+  for (let i = 1; i <= parts.length; i++) {
+    set.add(joinTagPath(parts.slice(0, i)));
   }
-  return list;
+  // update order: append child into its parent order if missing
+  const parent = parts.length > 1 ? joinTagPath(parts.slice(0, parts.length - 1)) : "";
+  const childName = parts[parts.length - 1];
+  const order = await loadTagOrder();
+  const arr = Array.isArray(order[parent]) ? order[parent] : [];
+  if (!arr.includes(childName)) arr.push(childName);
+  order[parent] = arr;
+  await saveTagOrder(order);
+  await saveTags(Array.from(set));
+  return loadTags();
 }
 
 export async function setWordTags(en: string, tags: string[]): Promise<Word | null> {
   const list = await loadWords();
   const idx = list.findIndex((w) => w.en.toLowerCase() === (en || "").toLowerCase());
   if (idx < 0) return null;
-  const norm = Array.from(new Set(tags.map((t) => (t || "").trim()).filter(Boolean)));
+  const norm = Array.from(
+    new Set(
+      (tags || [])
+        .map((t) => normalizeTagPath((t || "").trim()))
+        .filter((v): v is string => !!v)
+    )
+  );
   const updated: Word = { ...list[idx], tags: norm };
   const next = [...list];
   next[idx] = updated;
@@ -155,10 +308,12 @@ export async function toggleWordTag(en: string, tag: string, enabled: boolean): 
   const current = list[idx];
   const curTags = Array.isArray(current.tags) ? current.tags : [];
   const name = (tag || "").trim();
-  const nextTags = new Set(curTags.map((t) => (t || "").trim()).filter(Boolean));
-  if (enabled) nextTags.add(name); else nextTags.delete(name);
+  const target = SYSTEM_TAGS.has(name) ? name : (normalizeTagPath(name) || "");
+  if (!target) return current;
+  const nextTags = new Set(curTags.map((t) => (normalizeTagPath(t || "") || "")).filter(Boolean));
+  if (enabled) nextTags.add(target); else nextTags.delete(target);
   let updated: Word = { ...current, tags: Array.from(nextTags) };
-  if (enabled && name === REVIEW_TAG) {
+  if (enabled && target === REVIEW_TAG) {
     const now = Date.now();
     updated = {
       ...updated,
@@ -177,34 +332,50 @@ export async function toggleWordTag(en: string, tag: string, enabled: boolean): 
 
 export async function removeTag(tag: string): Promise<string[]> {
   const name = (tag || "").trim();
-  if (name === REVIEW_TAG || !name) return loadTags();
+  if (SYSTEM_TAGS.has(name) || !name) return loadTags();
+  const norm = normalizeTagPath(name);
+  if (!norm) return loadTags();
   const currentTags = await loadTags();
-  const nextTags = currentTags.filter((t) => t !== name);
+  const nextTags = currentTags.filter((t) => t !== norm);
   await saveTags(nextTags);
   const words = await loadWords();
   let dirty = false;
   const updated = words.map((w) => {
     const wt = Array.isArray(w.tags) ? w.tags : [];
-    const filtered = wt.filter((t) => t !== name);
+    const filtered = wt.filter((t) => t !== norm);
     if (filtered.length !== wt.length) { dirty = true; return { ...w, tags: filtered } as Word; }
     return w;
   });
   if (dirty) await saveWords(updated);
+  // update order: remove from its parent list
+  const p = parentOf(norm);
+  const n = nameOf(norm);
+  const order = await loadTagOrder();
+  if (Array.isArray(order[p])) {
+    order[p] = order[p].filter((x) => x !== n);
+    await saveTagOrder(order);
+  }
   return nextTags;
 }
 
 export async function removeTags(tags: string[]): Promise<string[]> {
   const set = new Set((tags || []).map((t) => (t || "").trim()).filter(Boolean));
   set.delete(REVIEW_TAG);
+  set.delete(EXAM_TAG);
   if (set.size === 0) return loadTags();
   const currentTags = await loadTags();
-  const nextTags = currentTags.filter((t) => !set.has(t));
+  const normalized = new Set<string>();
+  for (const t of set) {
+    const n = normalizeTagPath(t);
+    if (n) normalized.add(n);
+  }
+  const nextTags = currentTags.filter((t) => !normalized.has(t));
   await saveTags(nextTags);
   const words = await loadWords();
   let dirty = false;
   const updated = words.map((w) => {
     const wt = Array.isArray(w.tags) ? w.tags : [];
-    const filtered = wt.filter((t) => !set.has((t || "").trim()));
+    const filtered = wt.filter((t) => !normalized.has((normalizeTagPath(t || "") || "")));
     if (filtered.length !== wt.length) { dirty = true; return { ...w, tags: filtered } as Word; }
     return w;
   });
@@ -215,23 +386,191 @@ export async function removeTags(tags: string[]): Promise<string[]> {
 export async function renameTag(oldName: string, newName: string): Promise<string[]> {
   const from = (oldName || "").trim();
   const to = (newName || "").trim();
-  if (from === REVIEW_TAG || !from || !to || from === to) return loadTags();
+  if (SYSTEM_TAGS.has(from) || !from || !to || from === to) return loadTags();
+  const fromNorm = normalizeTagPath(from);
+  const toNorm = normalizeTagPath(to);
+  if (!fromNorm || !toNorm) return loadTags();
   const words = await loadWords();
   let dirty = false;
   const updated = words.map((w) => {
     const wt = Array.isArray(w.tags) ? w.tags : [];
-    if (!wt.includes(from) && !wt.includes(to)) return w;
-    const nextSet = new Set<string>(wt.map((t) => (t || "").trim()).filter(Boolean));
-    if (nextSet.has(from)) { dirty = true; nextSet.delete(from); nextSet.add(to); }
+    if (!wt.includes(fromNorm) && !wt.includes(toNorm)) return w;
+    const nextSet = new Set<string>(wt.map((t) => (normalizeTagPath(t || "") || "")).filter(Boolean));
+    if (nextSet.has(fromNorm)) { dirty = true; nextSet.delete(fromNorm); nextSet.add(toNorm); }
     return { ...w, tags: Array.from(nextSet) } as Word;
   });
   if (dirty) await saveWords(updated);
   const currentTags = await loadTags();
   const set = new Set(currentTags);
-  set.delete(from); set.add(to);
+  set.delete(fromNorm); set.add(toNorm);
   const nextTags = Array.from(set);
   await saveTags(nextTags);
+  // update order: rename within same parent (no subtree)
+  const fp = parentOf(fromNorm);
+  const fn = nameOf(fromNorm);
+  const tp = parentOf(toNorm);
+  const tn = nameOf(toNorm);
+  const order = await loadTagOrder();
+  if (fp === tp && Array.isArray(order[fp])) {
+    order[fp] = order[fp].map((x) => (x === fn ? tn : x));
+    await saveTagOrder(order);
+  }
   return nextTags;
+}
+
+// Subtree operations for hierarchical tags
+export async function removeTagSubtree(tag: string): Promise<string[]> {
+  const base = normalizeTagPath(tag || "");
+  if (!base || base === REVIEW_TAG || base === EXAM_TAG) return loadTags();
+  const currentTags = await loadTags();
+  const nextTags = currentTags.filter((t) => !(t === base || pathStartsWith(t, base)));
+  await saveTags(nextTags);
+  const words = await loadWords();
+  let dirty = false;
+  const updated = words.map((w) => {
+    const wt = Array.isArray(w.tags) ? w.tags : [];
+    const filtered = wt.filter((t) => {
+      const n = normalizeTagPath(t || "");
+      return !(n && (n === base || pathStartsWith(n, base)));
+    });
+    if (filtered.length !== wt.length) { dirty = true; return { ...w, tags: filtered } as Word; }
+    return w;
+  });
+  if (dirty) await saveWords(updated);
+  // order: remove the direct child from its parent; drop any sub-orders is optional
+  const p = parentOf(base);
+  const n = nameOf(base);
+  const order = await loadTagOrder();
+  if (Array.isArray(order[p])) {
+    order[p] = order[p].filter((x) => x !== n);
+    await saveTagOrder(order);
+  }
+  return nextTags;
+}
+
+export async function renameTagSubtree(from: string, to: string): Promise<string[]> {
+  const src = normalizeTagPath(from || "");
+  const dst = normalizeTagPath(to || "");
+  if (!src || !dst || src === REVIEW_TAG || src === EXAM_TAG) return loadTags();
+  const currentTags = await loadTags();
+  const remapped = new Set<string>();
+  for (const t of currentTags) {
+    if (t === REVIEW_TAG) { remapped.add(REVIEW_TAG); continue; }
+    if (t === src || pathStartsWith(t, src)) {
+      const suffix = t.slice(src.length);
+      const candidate = (dst + suffix).trim();
+      const norm = normalizeTagPath(candidate);
+      if (norm) remapped.add(norm);
+    } else {
+      const norm = normalizeTagPath(t);
+      if (norm) remapped.add(norm);
+    }
+  }
+  const nextTags = Array.from(remapped);
+  await saveTags(nextTags);
+
+  const words = await loadWords();
+  let dirty = false;
+  const updated = words.map((w) => {
+    const wt = Array.isArray(w.tags) ? w.tags : [];
+    const nextSet = new Set<string>();
+    for (const t of wt) {
+      const n = normalizeTagPath(t || "");
+      if (!n) continue;
+      if (n === src || pathStartsWith(n, src)) {
+        const suffix = n.slice(src.length);
+        const candidate = (dst + suffix).trim();
+        const nn = normalizeTagPath(candidate);
+        if (nn) { nextSet.add(nn); dirty = true; }
+      } else {
+        nextSet.add(n);
+      }
+    }
+    return { ...w, tags: Array.from(nextSet) } as Word;
+  });
+  if (dirty) await saveWords(updated);
+  // order: move child from old parent list to new parent list (rename last segment if changed)
+  const srcP = parentOf(src);
+  const srcN = nameOf(src);
+  const dstP = parentOf(dst);
+  const dstN = nameOf(dst);
+  const order = await loadTagOrder();
+  if (Array.isArray(order[srcP])) {
+    order[srcP] = order[srcP].filter((x) => x !== srcN);
+  }
+  const dstArr = Array.isArray(order[dstP]) ? order[dstP] : [];
+  if (!dstArr.includes(dstN)) dstArr.push(dstN);
+  order[dstP] = dstArr;
+  await saveTagOrder(order);
+  return nextTags;
+}
+
+// Copy a subtree from `from` to `to` (keep original; merge tags; add tags to words additionally)
+export async function copyTagSubtree(from: string, to: string): Promise<string[]> {
+  const src = normalizeTagPath(from || "");
+  const dst = normalizeTagPath(to || "");
+  if (!src || !dst || src === REVIEW_TAG || src === EXAM_TAG) return loadTags();
+  const srcParts = parseTagPath(src);
+  const dstParts = parseTagPath(dst);
+  if (dstParts.length > 3) return loadTags();
+
+  const currentTags = await loadTags();
+  const out = new Set<string>(currentTags);
+  for (const t of currentTags) {
+    if (t === src || pathStartsWith(t, src)) {
+      const suffix = t.slice(src.length);
+      const candidate = (dst + suffix).trim();
+      const norm = normalizeTagPath(candidate);
+      if (norm) out.add(norm);
+    }
+  }
+  const nextTags = Array.from(out);
+  await saveTags(nextTags);
+
+  // Update words: add copied tags in addition to originals
+  const words = await loadWords();
+  const updated = words.map((w) => {
+    const wt = Array.isArray(w.tags) ? w.tags : [];
+    const nextSet = new Set<string>(wt.map((t) => (normalizeTagPath(t || "") || "")).filter(Boolean));
+    let touched = false;
+    for (const t of wt) {
+      const n = normalizeTagPath(t || "");
+      if (!n) continue;
+      if (n === src || pathStartsWith(n, src)) {
+        const suffix = n.slice(src.length);
+        const candidate = (dst + suffix).trim();
+        const nn = normalizeTagPath(candidate);
+        if (nn && !nextSet.has(nn)) { nextSet.add(nn); touched = true; }
+      }
+    }
+    return touched ? ({ ...w, tags: Array.from(nextSet) } as Word) : w;
+  });
+  await saveWords(updated);
+
+  // Order: add top-level child under dst parent if missing
+  const dstP = parentOf(dst);
+  const dstN = nameOf(dst);
+  const order = await loadTagOrder();
+  const arr = Array.isArray(order[dstP]) ? order[dstP] : [];
+  if (!arr.includes(dstN)) arr.push(dstN);
+  order[dstP] = arr;
+  await saveTagOrder(order);
+  return nextTags;
+}
+
+// Reorder a child within its siblings under the same parent
+export async function reorderTagSibling(parentPath: string, name: string, direction: 'up' | 'down'): Promise<void> {
+  const order = await loadTagOrder();
+  const arr = Array.isArray(order[parentPath]) ? [...order[parentPath]] : [];
+  const idx = arr.indexOf(name);
+  if (idx < 0) return;
+  const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapWith < 0 || swapWith >= arr.length) return;
+  const tmp = arr[idx];
+  arr[idx] = arr[swapWith];
+  arr[swapWith] = tmp;
+  order[parentPath] = arr;
+  await saveTagOrder(order);
 }
 
 // ---------- SRS helpers ----------
@@ -332,4 +671,3 @@ export async function saveWordFontSize(size: number): Promise<number> {
   await AsyncStorage.setItem(PREF_WORD_FONT_SIZE_KEY, String(n));
   return n;
 }
-
