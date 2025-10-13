@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { loadSpeechSettings, listVoices, TtsVoice, loadVoiceSelection, saveVoiceForLang, saveRatePercent, getSpeechOptions, loadZhRate, saveZhRate, loadPitchPercent, savePitchPercent } from "@/utils/tts";
 import * as Speech from "expo-speech";
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -8,9 +8,19 @@ import Slider from '@react-native-community/slider';
 import { getSrsLimits, saveSrsLimits, getWordFontSize, saveWordFontSize } from "@/utils/storage";
 import { useI18n } from "@/i18n";
 import { Locale } from "@/i18n";
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
+import { buildBackupPayload, uploadBackupToDrive, downloadLatestBackupFromDrive, applyBackupPayload } from '@/utils/backup';
+
+// Move maybeCompleteAuthSession into effect to avoid edge-case crashes on some devices
+// and ensure it only runs after module load.
 
 export default function Settings() {
   const { t, locale, setLocale } = useI18n();
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [busy, setBusy] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
   const [ratePercent, setRatePercent] = useState<number>(50);
   const [pitchPercent, setPitchPercent] = useState<number>(50);
   const [voices, setVoices] = useState<TtsVoice[]>([]);
@@ -97,10 +107,80 @@ export default function Settings() {
     Speech.speak(text, { language: langCode, voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
   };
 
+  // ---- Google Sign-In (Drive appDataFolder) ----
+  useEffect(() => {
+    setMounted(true);
+    try { WebBrowser.maybeCompleteAuthSession(); } catch {}
+  }, []);
+
+  const redirectUri = makeRedirectUri({ scheme: 'haloword' });
+  const AuthSection = () => {
+    const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '517267237055-qc0t2sb77too3e2h47erd53glp1mosmj.apps.googleusercontent.com';
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    const expoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || webClientId;
+    const [request, response, promptAsync] = Google.useAuthRequest({
+      androidClientId,
+      webClientId,
+      expoClientId,
+      scopes: ['https://www.googleapis.com/auth/drive.appdata'],
+      redirectUri,
+    });
+
+    useEffect(() => {
+      if (response?.type === 'success') {
+        const token = response.authentication?.accessToken ?? null;
+        setAccessToken(token);
+        if (token) Alert.alert('Google 登入', '登入成功，已取得權杖');
+      }
+    }, [response]);
+
+    const onSignIn = async () => {
+      if (!request) { Alert.alert('Google 登入', '登入請求尚未就緒，請稍後再試'); return; }
+      await promptAsync();
+    };
+
+    return (
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <Button title={accessToken ? '已登入' : '登入 Google'} onPress={onSignIn} disabled={!!accessToken || !request || busy} />
+        <Button title={busy ? '處理中…' : '立即備份'} onPress={onBackupNow} disabled={busy || !accessToken} />
+        <Button title={busy ? '處理中…' : '還原備份'} onPress={onRestoreNow} color="#2e7d32" disabled={busy || !accessToken} />
+      </View>
+    );
+  };
+
+  const onBackupNow = async () => {
+    if (!accessToken) { Alert.alert('備份', '請先登入 Google'); return; }
+    try {
+      setBusy(true);
+      const payload = await buildBackupPayload();
+      await uploadBackupToDrive(accessToken, payload);
+      Alert.alert('備份', '已備份至 Google 雲端（App Data Folder）');
+    } catch (e: any) {
+      Alert.alert('備份失敗', String(e?.message || e));
+    } finally { setBusy(false); }
+  };
+
+  const onRestoreNow = async () => {
+    if (!accessToken) { Alert.alert('還原', '請先登入 Google'); return; }
+    try {
+      setBusy(true);
+      const obj = await downloadLatestBackupFromDrive(accessToken);
+      if (!obj) { Alert.alert('還原', '找不到備份檔'); return; }
+      await applyBackupPayload(obj);
+      Alert.alert('還原完成', '已套用備份，建議重新開啟 App 以確保設定同步');
+    } catch (e: any) {
+      Alert.alert('還原失敗', String(e?.message || e));
+    } finally { setBusy(false); }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <Text style={styles.title}>{t('settings.title')}</Text>
+
+        {/* Backup & Restore via Google Drive */}
+        <Text style={styles.sectionTitle}>Google 雲端備份</Text>
+        {mounted ? <AuthSection /> : null}
 
         <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
         <View style={{ marginBottom: 12 }}>
