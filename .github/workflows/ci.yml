@@ -37,23 +37,31 @@ jobs:
         run: npx expo-doctor
 
   preview-build:
-    if: ${{ github.event_name == 'push' && env.EAS_TOKEN != '' }}
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     needs: quality
     steps:
+      - name: Skip preview build (missing token)
+        if: ${{ env.EAS_TOKEN == '' }}
+        run: echo "EAS_TOKEN not set; skipping preview build job."
+
       - name: Checkout
+        if: ${{ env.EAS_TOKEN != '' }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ env.EAS_TOKEN != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: ${{ env.EAS_TOKEN != '' }}
         run: npm ci
 
       - name: Setup Expo
+        if: ${{ env.EAS_TOKEN != '' }}
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
@@ -61,4 +69,5 @@ jobs:
           token: ${{ secrets.EAS_TOKEN }}
 
       - name: Queue Android preview build
+        if: ${{ env.EAS_TOKEN != '' }}
         run: npx eas build --platform android --profile preview --non-interactive --no-wait
