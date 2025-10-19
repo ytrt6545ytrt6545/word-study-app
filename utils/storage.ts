@@ -122,9 +122,16 @@ export async function buildOrderedTagTree(paths: string[]): Promise<TagNode[]> {
 
 // System-reserved tag name for review (avoid deletion/rename)
 export const REVIEW_TAG = "\u8907\u7fd2"; // 複習
-export const EXAM_TAG = "\\u8003\\u8a66"; // 考試
+export const EXAM_TAG = "\u8003\u8a66"; // 考試
 const SYSTEM_TAGS = new Set([REVIEW_TAG, EXAM_TAG]);
 const LEGACY_REVIEW_TAGS = new Set([REVIEW_TAG]);
+const LEGACY_EXAM_TAGS = new Set([EXAM_TAG, "\\u8003\\u8a66"]);
+
+function normalizeSystemTagName(name: string): string {
+  if (LEGACY_REVIEW_TAGS.has(name)) return REVIEW_TAG;
+  if (LEGACY_EXAM_TAGS.has(name)) return EXAM_TAG;
+  return name;
+}
 
 export type WordStatus = "unknown" | "learning" | "mastered";
 export type Word = {
@@ -172,7 +179,7 @@ export async function loadWords(): Promise<Word[]> {
       if (typeof t !== "string") continue;
       const name = (t || "").trim();
       if (!name) continue;
-      tagsSet.add(LEGACY_REVIEW_TAGS.has(name) ? REVIEW_TAG : name);
+      tagsSet.add(normalizeSystemTagName(name));
     }
     const tags = Array.from(tagsSet);
     const base: Word = {
@@ -230,8 +237,8 @@ export async function loadTags(): Promise<string[]> {
         if (typeof it !== "string") continue;
         const cleaned = (it || "").trim();
         if (!cleaned) continue;
-        const mapped = LEGACY_REVIEW_TAGS.has(cleaned) ? REVIEW_TAG : cleaned;
-        if (mapped === REVIEW_TAG || mapped === EXAM_TAG) { set.add(mapped); continue; }
+        const mapped = normalizeSystemTagName(cleaned);
+        if (SYSTEM_TAGS.has(mapped)) { set.add(mapped); continue; }
         const norm = normalizeTagPath(mapped);
         if (norm) set.add(norm);
       }
@@ -246,8 +253,9 @@ export async function loadTags(): Promise<string[]> {
 export async function saveTags(tags: string[]) {
   const normSet = new Set<string>();
   for (const t of tags) {
-    const cleaned = (t || "").trim();
-    if (!cleaned) continue;
+    const cleanedRaw = (t || "").trim();
+    if (!cleanedRaw) continue;
+    const cleaned = normalizeSystemTagName(cleanedRaw);
     if (SYSTEM_TAGS.has(cleaned)) { normSet.add(cleaned); continue; }
     const norm = normalizeTagPath(cleaned);
     if (norm) normSet.add(norm);
@@ -262,8 +270,9 @@ export async function saveTags(tags: string[]) {
 export async function addTag(tag: string): Promise<string[]> {
   const name = (tag || "").trim();
   if (!name) return loadTags();
-  if (SYSTEM_TAGS.has(name)) return loadTags();
-  const norm = normalizeTagPath(name);
+  const mapped = normalizeSystemTagName(name);
+  if (SYSTEM_TAGS.has(mapped)) return loadTags();
+  const norm = normalizeTagPath(mapped);
   if (!norm) return loadTags();
   const list = await loadTags();
   const set = new Set(list);
@@ -287,13 +296,16 @@ export async function setWordTags(en: string, tags: string[]): Promise<Word | nu
   const list = await loadWords();
   const idx = list.findIndex((w) => w.en.toLowerCase() === (en || "").toLowerCase());
   if (idx < 0) return null;
-  const norm = Array.from(
-    new Set(
-      (tags || [])
-        .map((t) => normalizeTagPath((t || "").trim()))
-        .filter((v): v is string => !!v)
-    )
-  );
+  const normSet = new Set<string>();
+  for (const raw of tags || []) {
+    const cleanedRaw = (raw || "").trim();
+    if (!cleanedRaw) continue;
+    const cleaned = normalizeSystemTagName(cleanedRaw);
+    if (SYSTEM_TAGS.has(cleaned)) { normSet.add(cleaned); continue; }
+    const norm = normalizeTagPath(cleaned);
+    if (norm) normSet.add(norm);
+  }
+  const norm = Array.from(normSet);
   const updated: Word = { ...list[idx], tags: norm };
   const next = [...list];
   next[idx] = updated;
@@ -307,10 +319,20 @@ export async function toggleWordTag(en: string, tag: string, enabled: boolean): 
   if (idx < 0) return null;
   const current = list[idx];
   const curTags = Array.isArray(current.tags) ? current.tags : [];
-  const name = (tag || "").trim();
-  const target = SYSTEM_TAGS.has(name) ? name : (normalizeTagPath(name) || "");
+  const rawName = (tag || "").trim();
+  const mapped = normalizeSystemTagName(rawName);
+  const target = SYSTEM_TAGS.has(mapped) ? mapped : (normalizeTagPath(mapped) || "");
   if (!target) return current;
-  const nextTags = new Set(curTags.map((t) => (normalizeTagPath(t || "") || "")).filter(Boolean));
+  const nextTags = new Set(
+    curTags
+      .map((t) => {
+        const cleaned = normalizeSystemTagName((t || "").trim());
+        if (!cleaned) return "";
+        if (SYSTEM_TAGS.has(cleaned)) return cleaned;
+        return normalizeTagPath(cleaned) || "";
+      })
+      .filter(Boolean)
+  );
   if (enabled) nextTags.add(target); else nextTags.delete(target);
   let updated: Word = { ...current, tags: Array.from(nextTags) };
   if (enabled && target === REVIEW_TAG) {
@@ -332,8 +354,9 @@ export async function toggleWordTag(en: string, tag: string, enabled: boolean): 
 
 export async function removeTag(tag: string): Promise<string[]> {
   const name = (tag || "").trim();
-  if (SYSTEM_TAGS.has(name) || !name) return loadTags();
-  const norm = normalizeTagPath(name);
+  const mapped = normalizeSystemTagName(name);
+  if (SYSTEM_TAGS.has(mapped) || !mapped) return loadTags();
+  const norm = normalizeTagPath(mapped);
   if (!norm) return loadTags();
   const currentTags = await loadTags();
   const nextTags = currentTags.filter((t) => t !== norm);

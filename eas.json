@@ -12,12 +12,14 @@
       "distribution": "internal"
     },
     "preview": {
+      "credentialsSource": "local",
       "android": {
         "buildType": "apk"
       },
       "distribution": "internal"
     },
     "production": {
+      "credentialsSource": "local",
       "android": {
         "buildType": "app-bundle"
       }

@@ -48,3 +48,22 @@ You can start developing by editing the files inside the `app` directory. This p
 ## 介面語言（i18n）
 
 - 內建 zh-TW 與 en，於設定頁可切換，並會記錄於本機。
+
+## Environment Variables
+
+- Keep `.env` ignored and fill it locally with placeholder values; inject real secrets via CI (for example GitHub Actions secrets).
+- Rotate API keys regularly and note in docs how teammates should supply them.
+
+## Release Checklist
+
+1. Run `npm version <patch|minor|major>` to bump `package.json`. Expo config now reads this version and re-computes `android.versionCode`.
+2. Refresh `EXPO_PUBLIC_BUILD_DATE` (e.g. `date -Is`) and store it in `.env` or a CI secret.
+3. Run `npm run lint`, `npx tsc --noEmit`, and `npx expo-doctor` before tagging a release.
+4. Queue `eas build --profile preview` (locally or in CI) to verify the binary before shipping.
+
+## CI/CD
+
+- `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests.
+  - `quality` installs dependencies, then runs lint, TypeScript, and `expo-doctor`.
+  - `preview-build` runs when `EAS_TOKEN` is set, logging into EAS and scheduling an Android preview build with `--no-wait`.
+- Keep `EAS_TOKEN`, the OpenAI key, and other secrets in GitHub Secrets instead of committing them.

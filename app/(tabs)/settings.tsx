@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { loadSpeechSettings, listVoices, TtsVoice, loadVoiceSelection, saveVoiceForLang, saveRatePercent, getSpeechOptions, loadZhRate, saveZhRate, loadPitchPercent, savePitchPercent } from "@/utils/tts";
 import * as Speech from "expo-speech";
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Picker } from '@react-native-picker/picker';
-import Slider from '@react-native-community/slider';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Picker } from "@react-native-picker/picker";
+import Slider from "@react-native-community/slider";
 import { getSrsLimits, saveSrsLimits, getWordFontSize, saveWordFontSize } from "@/utils/storage";
 import { useI18n } from "@/i18n";
 import { Locale } from "@/i18n";
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
-import { buildBackupPayload, uploadBackupToDrive, downloadLatestBackupFromDrive, applyBackupPayload } from '@/utils/backup';
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
+import Constants from "expo-constants";
+import { buildBackupPayload, uploadBackupToDrive, downloadLatestBackupFromDrive, applyBackupPayload, exportBackupToDevice, importBackupFromDevice } from "@/utils/backup";
 
 // Move maybeCompleteAuthSession into effect to avoid edge-case crashes on some devices
 // and ensure it only runs after module load.
+
+const ENABLE_GOOGLE_SIGNIN = false;
 
 export default function Settings() {
   const { t, locale, setLocale } = useI18n();
@@ -54,18 +57,24 @@ export default function Settings() {
     })();
   }, []);
 
-  const enVoices = useMemo(() => voices.filter(v => (v.language || '').toLowerCase().startsWith('en')), [voices]);
-  const zhVoices = useMemo(() => voices.filter(v => (v.language || '').toLowerCase().startsWith('zh')), [voices]);
+  const enVoices = useMemo(
+    () => voices.filter((v) => (v.language || "").toLowerCase().startsWith("en")),
+    [voices]
+  );
+  const zhVoices = useMemo(
+    () => voices.filter((v) => (v.language || "").toLowerCase().startsWith("zh")),
+    [voices]
+  );
   const currentEnName = useMemo(() => {
-    if (!voiceEn) return '系統預設';
-    const v = enVoices.find(v => v.identifier === voiceEn);
-    return (v?.name || v?.identifier || voiceEn);
-  }, [voiceEn, enVoices]);
+    if (!voiceEn) return t("settings.systemDefault");
+    const v = enVoices.find((item) => item.identifier === voiceEn);
+    return v?.name || v?.identifier || voiceEn;
+  }, [voiceEn, enVoices, t]);
   const currentZhName = useMemo(() => {
-    if (!voiceZh) return '系統預設';
-    const v = zhVoices.find(v => v.identifier === voiceZh);
-    return (v?.name || v?.identifier || voiceZh);
-  }, [voiceZh, zhVoices]);
+    if (!voiceZh) return t("settings.systemDefault");
+    const v = zhVoices.find((item) => item.identifier === voiceZh);
+    return v?.name || v?.identifier || voiceZh;
+  }, [voiceZh, zhVoices, t]);
 
   const onCommitRate = async (value: number) => {
     setRatePercent(value);
@@ -76,8 +85,9 @@ export default function Settings() {
     setPitchPercent(v);
     await savePitchPercent(v);
   };
-  const onPickVoice = async (lang: 'en' | 'zh', id: string | null) => {
-    if (lang === 'en') setVoiceEn(id); else setVoiceZh(id);
+  const onPickVoice = async (lang: "en" | "zh", id: string | null) => {
+    if (lang === "en") setVoiceEn(id);
+    else setVoiceZh(id);
     await saveVoiceForLang(lang, id);
   };
   const onCommitNewLimit = async (value: number) => {
@@ -99,10 +109,12 @@ export default function Settings() {
     const next = await saveZhRate(m);
     setZhRate(next);
   };
-  const onPreviewVoice = async (lang: 'en' | 'zh') => {
-    try { Speech.stop(); } catch {}
-    const text = lang === 'en' ? 'take an example' : '這是一段示例';
-    const langCode = lang === 'en' ? 'en-US' : 'zh-TW';
+  const onPreviewVoice = async (lang: "en" | "zh") => {
+    try {
+      Speech.stop();
+    } catch {}
+    const text = lang === "en" ? "take an example" : "這是一段示例";
+    const langCode = lang === "en" ? "en-US" : "zh-TW";
     const opts = await getSpeechOptions(langCode);
     Speech.speak(text, { language: langCode, voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
   };
@@ -110,176 +122,346 @@ export default function Settings() {
   // ---- Google Sign-In (Drive appDataFolder) ----
   useEffect(() => {
     setMounted(true);
-    try { WebBrowser.maybeCompleteAuthSession(); } catch {}
+    try {
+      WebBrowser.maybeCompleteAuthSession();
+    } catch {}
   }, []);
 
-  const redirectUri = makeRedirectUri({ scheme: 'haloword' });
+  const isExpoGo = Constants.appOwnership === "expo";
+  const redirectUri = makeRedirectUri({ scheme: "haloword" });
+  useEffect(() => {
+    try {
+      console.log("GoogleAuth Debug", {
+        isExpoGo,
+        redirectUri,
+        owner: Constants.expoConfig?.owner,
+        slug: Constants.expoConfig?.slug,
+      });
+    } catch {}
+  }, [redirectUri, isExpoGo]);
+
+  const cfgAndroidClientId = (Constants.expoConfig as any)?.extra?.google?.androidClientId as
+    | string
+    | undefined;
+  const dbgAndroidClientId =
+    cfgAndroidClientId ||
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+    "1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb.apps.googleusercontent.com";
+  const dbgWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const dbgExpoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || dbgWebClientId;
+
   const AuthSection = () => {
-    const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '517267237055-qc0t2sb77too3e2h47erd53glp1mosmj.apps.googleusercontent.com';
-    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-    const expoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || webClientId;
+    const androidClientId =
+      ((Constants.expoConfig as any)?.extra?.google?.androidClientId as string | undefined) ||
+      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+      "1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb.apps.googleusercontent.com";
+    const [showDebug, setShowDebug] = useState(false);
     const [request, response, promptAsync] = Google.useAuthRequest({
       androidClientId,
-      webClientId,
-      expoClientId,
-      scopes: ['https://www.googleapis.com/auth/drive.appdata'],
+      scopes: ["https://www.googleapis.com/auth/drive.appdata"],
       redirectUri,
     });
 
     useEffect(() => {
-      if (response?.type === 'success') {
+      if (response?.type === "success") {
         const token = response.authentication?.accessToken ?? null;
         setAccessToken(token);
-        if (token) Alert.alert('Google 登入', '登入成功，已取得權杖');
+        if (token) Alert.alert("Google 登入", "登入成功，已授權存取 App Data Folder。");
+      } else if (response?.type === "error") {
+        const detail = (response as any)?.error || (response as any)?.params?.error || "error";
+        const desc = (response as any)?.params?.error_description || "";
+        Alert.alert("Google 登入失敗", `${detail}${desc ? `\n${desc}` : ""}`);
       }
     }, [response]);
 
     const onSignIn = async () => {
-      if (!request) { Alert.alert('Google 登入', '登入請求尚未就緒，請稍後再試'); return; }
+      if (!request) {
+        Alert.alert("Google 登入", "登入請求尚未就緒，請稍後再試。");
+        return;
+      }
       await promptAsync();
     };
 
     return (
-      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <Button title={accessToken ? '已登入' : '登入 Google'} onPress={onSignIn} disabled={!!accessToken || !request || busy} />
-        <Button title={busy ? '處理中…' : '立即備份'} onPress={onBackupNow} disabled={busy || !accessToken} />
-        <Button title={busy ? '處理中…' : '還原備份'} onPress={onRestoreNow} color="#2e7d32" disabled={busy || !accessToken} />
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <Button
+          title={accessToken ? "已登入" : "登入 Google"}
+          onPress={onSignIn}
+          disabled={!!accessToken || !request || busy}
+        />
+        <Button
+          title={busy ? "備份中…" : "立即備份"}
+          onPress={onBackupNow}
+          disabled={busy || !accessToken}
+        />
+        <Button
+          title={busy ? "還原中…" : "立即還原"}
+          onPress={onRestoreNow}
+          color="#2e7d32"
+          disabled={busy || !accessToken}
+        />
+        {showDebug ? (
+          <View style={{ marginTop: 8 }}>
+            <Text style={styles.dim}>androidClientId: {androidClientId}</Text>
+            <Text style={styles.dim}>redirectUri: {redirectUri}</Text>
+          </View>
+        ) : null}
+        <Button title="顯示詳細" onPress={() => setShowDebug((s) => !s)} />
       </View>
     );
   };
 
   const onBackupNow = async () => {
-    if (!accessToken) { Alert.alert('備份', '請先登入 Google'); return; }
+    if (!accessToken) {
+      Alert.alert("備份", "請先登入 Google。");
+      return;
+    }
     try {
       setBusy(true);
       const payload = await buildBackupPayload();
       await uploadBackupToDrive(accessToken, payload);
-      Alert.alert('備份', '已備份至 Google 雲端（App Data Folder）');
+      Alert.alert("備份", "已備份至 Google 雲端（App Data Folder）。");
     } catch (e: any) {
-      Alert.alert('備份失敗', String(e?.message || e));
-    } finally { setBusy(false); }
+      Alert.alert("備份失敗", String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onRestoreNow = async () => {
-    if (!accessToken) { Alert.alert('還原', '請先登入 Google'); return; }
+    if (!accessToken) {
+      Alert.alert("還原", "請先登入 Google。");
+      return;
+    }
     try {
       setBusy(true);
       const obj = await downloadLatestBackupFromDrive(accessToken);
-      if (!obj) { Alert.alert('還原', '找不到備份檔'); return; }
+      if (!obj) {
+        Alert.alert("還原", "找不到備份。");
+        return;
+      }
       await applyBackupPayload(obj);
-      Alert.alert('還原完成', '已套用備份，建議重新開啟 App 以確保設定同步');
+      Alert.alert("還原完成", "已套用備份，建議重新啟動 App。");
     } catch (e: any) {
-      Alert.alert('還原失敗', String(e?.message || e));
-    } finally { setBusy(false); }
+      Alert.alert("還原失敗", String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onExportLocal = async () => {
+    try {
+      setBusy(true);
+      const msg = await exportBackupToDevice();
+      Alert.alert("本機匯出", msg);
+    } catch (e: any) {
+      Alert.alert("本機匯出失敗", String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onImportLocal = async () => {
+    try {
+      setBusy(true);
+      const obj = await importBackupFromDevice();
+      if (!obj) {
+        Alert.alert("本機還原", "未選擇檔案。");
+        return;
+      }
+      await applyBackupPayload(obj);
+      Alert.alert("本機還原完成", "已套用備份，建議重新啟動 App。");
+    } catch (e: any) {
+      Alert.alert("本機還原失敗", String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={styles.title}>{t('settings.title')}</Text>
+        <Text style={styles.title}>{t("settings.title")}</Text>
 
-        {/* Backup & Restore via Google Drive */}
+        <Text style={styles.sectionTitle}>本機備份 / 還原</Text>
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <Button title={busy ? "匯出中…" : "匯出到本機"} onPress={onExportLocal} disabled={busy} />
+          <Button title={busy ? "匯入中…" : "從本機匯入"} onPress={onImportLocal} disabled={busy} />
+        </View>
+
         <Text style={styles.sectionTitle}>Google 雲端備份</Text>
-        {mounted ? <AuthSection /> : null}
+        {ENABLE_GOOGLE_SIGNIN && mounted ? (
+          <AuthSection />
+        ) : (
+          <Text style={styles.dim}>目前僅提供本機備份，Google 功能暫停使用。</Text>
+        )}
 
-        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.language")}</Text>
         <View style={{ marginBottom: 12 }}>
           <Picker selectedValue={locale} onValueChange={(val) => setLocale(val as Locale)}>
-            <Picker.Item label={t('settings.language.zh')} value={'zh-TW'} />
-            <Picker.Item label={t('settings.language.en')} value={'en'} />
+            <Picker.Item label={t("settings.language.zh")} value={"zh-TW"} />
+            <Picker.Item label={t("settings.language.en")} value={"en"} />
           </Picker>
         </View>
 
-        <Text style={styles.sectionTitle}>{t('settings.dailyLimit')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.dailyLimit")}</Text>
         <View style={{ marginBottom: 12 }}>
-          <Text>{t('settings.newLimit', { n: dailyNewLimit })}</Text>
-          <Slider minimumValue={0} maximumValue={100} step={1} value={dailyNewLimit} onValueChange={setDailyNewLimit} onSlidingComplete={onCommitNewLimit} />
-          <Text>{t('settings.reviewLimit', { n: dailyReviewLimit })}</Text>
-          <Slider minimumValue={0} maximumValue={1000} step={10} value={dailyReviewLimit} onValueChange={setDailyReviewLimit} onSlidingComplete={onCommitReviewLimit} />
+          <Text>{t("settings.newLimit", { n: dailyNewLimit })}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={dailyNewLimit}
+            onValueChange={setDailyNewLimit}
+            onSlidingComplete={onCommitNewLimit}
+          />
+          <Text>{t("settings.reviewLimit", { n: dailyReviewLimit })}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={1000}
+            step={10}
+            value={dailyReviewLimit}
+            onValueChange={setDailyReviewLimit}
+            onSlidingComplete={onCommitReviewLimit}
+          />
         </View>
 
-        <Text style={styles.sectionTitle}>{t('settings.rate')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.rate")}</Text>
         <View style={{ marginBottom: 4 }}>
-          <Slider minimumValue={0} maximumValue={100} step={1} value={ratePercent} onValueChange={setRatePercent} onSlidingComplete={onCommitRate} />
-          <Text style={styles.dim}>{t('settings.rate.hint', { n: ratePercent })}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={ratePercent}
+            onValueChange={setRatePercent}
+            onSlidingComplete={onCommitRate}
+          />
+          <Text style={styles.dim}>{t("settings.rate.hint", { n: ratePercent })}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>{t('settings.zhRate')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.zhRate")}</Text>
         <View style={styles.row}>
           {[1, 1.15, 1.25, 1.35].map((m) => (
             <View key={m} style={{ marginRight: 6 }}>
-              <Button title={`${zhRate === m ? '✓ ' : ''}${m}X`} onPress={() => onSetZhRate(m)} />
+              <Button title={`${zhRate === m ? "✓ " : ""}${m}x`} onPress={() => onSetZhRate(m)} />
             </View>
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>{t('settings.pitch')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.pitch")}</Text>
         <View style={{ marginBottom: 8 }}>
-          <Slider minimumValue={0} maximumValue={100} step={1} value={pitchPercent} onValueChange={setPitchPercent} onSlidingComplete={onCommitPitch} />
-          <Text style={styles.dim}>{t('settings.pitch.hint', { n: pitchPercent })}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={pitchPercent}
+            onValueChange={setPitchPercent}
+            onSlidingComplete={onCommitPitch}
+          />
+          <Text style={styles.dim}>{t("settings.pitch.hint", { n: pitchPercent })}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>{t('settings.wordFont')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.wordFont")}</Text>
         <View style={{ marginBottom: 8 }}>
-          <Text>{t('settings.wordFont.value', { n: wordFontSize })}</Text>
-          <Slider minimumValue={12} maximumValue={48} step={1} value={wordFontSize} onValueChange={setWordFontSize} onSlidingComplete={onCommitWordFont} />
+          <Text>{t("settings.wordFont.value", { n: wordFontSize })}</Text>
+          <Slider
+            minimumValue={12}
+            maximumValue={48}
+            step={1}
+            value={wordFontSize}
+            onValueChange={setWordFontSize}
+            onSlidingComplete={onCommitWordFont}
+          />
         </View>
 
-        <Text style={styles.sectionTitle}>{t('settings.enVoices')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.enVoices")}</Text>
         {loadingVoices ? (
-          <Text style={styles.dim}>{t('settings.loadingVoices')}</Text>
+          <Text style={styles.dim}>{t("settings.loadingVoices")}</Text>
         ) : (
           <View style={styles.voiceList}>
             <View style={{ flex: 1 }}>
-              <Picker selectedValue={voiceEn ?? ''} onValueChange={(val) => onPickVoice('en', val === '' ? null : String(val))}>
-                <Picker.Item label={t('settings.systemDefault')} value="" />
-                {enVoices.map(v => (
+              <Picker
+                selectedValue={voiceEn ?? ""}
+                onValueChange={(val) => onPickVoice("en", val === "" ? null : String(val))}
+              >
+                <Picker.Item label={t("settings.systemDefault")} value="" />
+                {enVoices.map((v) => (
                   <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
                 ))}
               </Picker>
             </View>
             <View style={styles.voiceRow}>
-              <Text style={styles.voiceName} numberOfLines={1}>{currentEnName}</Text>
-              <Pressable onPress={() => onPreviewVoice('en')} accessibilityLabel={t('settings.previewEn')} style={{ paddingHorizontal: 6 }}>
+              <Text style={styles.voiceName} numberOfLines={1}>
+                {currentEnName}
+              </Text>
+              <Pressable
+                onPress={() => onPreviewVoice("en")}
+                accessibilityLabel={t("settings.previewEn")}
+                style={{ paddingHorizontal: 6 }}
+              >
                 <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
               </Pressable>
             </View>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>{t('settings.zhVoices')}</Text>
+        <Text style={styles.sectionTitle}>{t("settings.zhVoices")}</Text>
         {loadingVoices ? (
-          <Text style={styles.dim}>{t('settings.loadingVoices')}</Text>
+          <Text style={styles.dim}>{t("settings.loadingVoices")}</Text>
         ) : (
           <View style={styles.voiceList}>
             <View style={{ flex: 1 }}>
-              <Picker selectedValue={voiceZh ?? ''} onValueChange={(val) => onPickVoice('zh', val === '' ? null : String(val))}>
-                <Picker.Item label={t('settings.systemDefault')} value="" />
-                {zhVoices.map(v => (
+              <Picker
+                selectedValue={voiceZh ?? ""}
+                onValueChange={(val) => onPickVoice("zh", val === "" ? null : String(val))}
+              >
+                <Picker.Item label={t("settings.systemDefault")} value="" />
+                {zhVoices.map((v) => (
                   <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
                 ))}
               </Picker>
             </View>
             <View style={styles.voiceRow}>
-              <Text style={styles.voiceName} numberOfLines={1}>{currentZhName}</Text>
-              <Pressable onPress={() => onPreviewVoice('zh')} accessibilityLabel={t('settings.previewZh')} style={{ paddingHorizontal: 6 }}>
+              <Text style={styles.voiceName} numberOfLines={1}>
+                {currentZhName}
+              </Text>
+              <Pressable
+                onPress={() => onPreviewVoice("zh")}
+                accessibilityLabel={t("settings.previewZh")}
+                style={{ paddingHorizontal: 6 }}
+              >
                 <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
               </Pressable>
             </View>
           </View>
         )}
+
+        <View style={{ marginTop: 12 }}>
+          <Button title="重新播放預設英文語音" onPress={() => onPreviewVoice("en")} />
+        </View>
+
+        <View style={{ marginTop: 12 }}>
+          <Text style={styles.dim}>ExpoGo: {String(isExpoGo)}</Text>
+          <Text style={styles.dim}>redirectUri: {redirectUri}</Text>
+          <Text style={styles.dim}>
+            owner/slug: {String(Constants.expoConfig?.owner)}/{String(Constants.expoConfig?.slug)}
+          </Text>
+          <Text style={styles.dim}>webClientId: {String(dbgWebClientId)}</Text>
+          <Text style={styles.dim}>expoClientId: {String(dbgExpoClientId)}</Text>
+          <Text style={styles.dim}>androidClientId: {String(dbgAndroidClientId)}</Text>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
-  row: { flexDirection: 'row', gap: 10 },
+  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: "bold", marginTop: 12, marginBottom: 8 },
+  row: { flexDirection: "row", gap: 10 },
   voiceList: { marginBottom: 8 },
-  voiceRow: { flexDirection: 'row', alignItems: 'center' },
-  voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: '#333' },
-  dim: { color: '#666' },
+  voiceRow: { flexDirection: "row", alignItems: "center" },
+  voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: "#333" },
+  dim: { color: "#666" },
 });

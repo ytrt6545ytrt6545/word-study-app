@@ -1,4 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+﻿import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Sharing from 'expo-sharing';
 
 // Minimal Google Drive helpers for appDataFolder backup/restore.
 // These functions expect a valid OAuth access token with scope
@@ -94,5 +98,46 @@ export async function downloadLatestBackupFromDrive(token: string): Promise<any 
   if (!res.ok) throw new Error('Drive download failed');
   const text = await res.text();
   try { return JSON.parse(text); } catch { return null; }
+}
+
+// ---- Local (device) backup/import helpers ----
+
+export async function exportBackupToDevice(): Promise<string> {
+  const dataObj = await buildBackupPayload();
+  const json = JSON.stringify(dataObj, null, 2);
+
+  // Android: let user pick a directory and write with SAF
+  if (Platform.OS === 'android') {
+    const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+    if (!perm.granted) throw new Error('已取消目錄授權');
+    const name = `en-study-backup-${Date.now()}.json`;
+    const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+      perm.directoryUri,
+      name,
+      'application/json'
+    );
+    await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
+    return '已匯出到: ' + name;
+  }
+
+  // iOS/others: export via share sheet
+  const tmp = FileSystem.cacheDirectory + `en-study-backup-${Date.now()}.json`;
+  await FileSystem.writeAsStringAsync(tmp, json, { encoding: FileSystem.EncodingType.UTF8 });
+  try { await Sharing.shareAsync(tmp, { dialogTitle: '匯出備份' }); } catch {}
+  return '已匯出備份檔';
+}
+
+export async function importBackupFromDevice(): Promise<any | null> {
+  const res = await DocumentPicker.getDocumentAsync({
+    type: 'application/json',
+    multiple: false,
+    copyToCacheDirectory: true,
+  });
+  const asset: any = (res as any)?.assets?.[0] ?? (res as any);
+  if (!asset || asset.canceled) return null;
+  const uri: string = asset.uri || asset.file?.uri;
+  if (!uri) return null;
+  const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+  try { return JSON.parse(text); } catch { throw new Error('檔案內容不是有效的 JSON'); }
 }
 

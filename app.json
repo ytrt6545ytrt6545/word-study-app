@@ -1,25 +1,42 @@
 {
   "expo": {
-    "name": "Halo Word",
-    "slug": "halo-word",
+    "name": "en-study",
+    "slug": "bwcystapp",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./Vocab.png",
-    "scheme": "haloword",
+    "scheme": [
+      "haloword",
+      "com.googleusercontent.apps.1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb"
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bwcyst.chiwordstudy"
     },
     "android": {
-      "appName": "Halo Word",
+      "appName": "en-study",
       "versionCode": 2,
-      "package": "com.truechitest.haloword",
+      "package": "com.bwcyst.chiwordstudy",
       "adaptiveIcon": {
         "foregroundImage": "./Vocab.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.googleusercontent.apps.1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb",
+              "host": "oauth2redirect",
+              "pathPrefix": "/google"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -44,10 +61,13 @@
     },
     "extra": {
       "router": {},
+      "google": {
+        "androidClientId": "1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb.apps.googleusercontent.com"
+      },
       "eas": {
-        "projectId": "a3289676-1d98-42d6-9300-fd44789d7c8f"
+        "projectId": "4726f1b8-456d-47d3-829a-4d682802dce9"
       }
     },
-    "owner": "truechitest"
+    "owner": "bwcyst"
   }
 }

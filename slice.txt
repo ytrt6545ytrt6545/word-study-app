@@ -1,0 +1,5 @@
+prompt: 'select_account',\r\n});
+
+    useEffect(() => {
+      if (response?.type === 'success') {
+        const token = 

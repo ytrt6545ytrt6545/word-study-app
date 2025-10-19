@@ -28,9 +28,12 @@ const dict = {
 
     // Index
     'index.title': '首頁',
-    'index.lastUpdated': '上次修改：{date}',
+    'index.lastUpdated': '建構日期：{date}',
+    'index.lastUpdated.missing': '建構日期：未設定',
+    'index.notice': '更新資訊',
     'index.tagsManage': '標籤管理',
     'index.review': '複習',
+    'index.exam': '考試',
 
     // Words
     'words.title': '單字列表',
@@ -183,9 +186,12 @@ const dict = {
     'common.no': 'No',
 
     'index.title': 'Home',
-    'index.lastUpdated': 'Last updated: {date}',
+    'index.lastUpdated': 'Build date: {date}',
+    'index.lastUpdated.missing': 'Build date: N/A',
+    'index.notice': 'Updates',
     'index.tagsManage': 'Tags',
     'index.review': 'Review',
+    'index.exam': 'Exam',
 
     'words.title': 'Word List',
     'words.search.placeholder': 'Search by EN/ZH/Tag',
