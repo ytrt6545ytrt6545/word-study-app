@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWordFontSize } from "@/utils/storage";
@@ -19,6 +19,17 @@ export default function Words() {
   const [sortDesc, setSortDesc] = useState(true);
   const [search, setSearch] = useState("");
   const [wordFont, setWordFont] = useState<number>(18);
+  const speechOptsRef = useRef<{ en: Awaited<ReturnType<typeof getSpeechOptions>> | null }>({ en: null });
+
+  const refreshSpeechOptions = useCallback(async () => {
+    try {
+      const enOpts = await getSpeechOptions("en-US");
+      speechOptsRef.current = { en: enOpts };
+    } catch (err) {
+      console.error("load speech options failed", err);
+      speechOptsRef.current = { en: null };
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -35,11 +46,21 @@ export default function Words() {
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
       (async () => {
-        setWords(await loadWords());
-        setWordFont(await getWordFontSize());
+        try {
+          const [list, fontSize] = await Promise.all([loadWords(), getWordFontSize()]);
+          if (!active) return;
+          setWords(list);
+          setWordFont(fontSize);
+        } finally {
+          await refreshSpeechOptions();
+        }
       })();
-    }, [])
+      return () => {
+        active = false;
+      };
+    }, [refreshSpeechOptions])
   );
 
   const deleteAndPersist = async (target: string) => {
@@ -108,17 +129,32 @@ export default function Words() {
     return `${yy}/${mm}/${dd}`;
   };
 
-  const onSpeak = async (text: string, en: string) => {
+  const onSpeak = (text: string, en: string) => {
+    const opts = speechOptsRef.current?.en;
+
     try {
-      await bumpReview(en);
-    } finally {
-      try {
-        Speech.stop();
-      } catch {}
-      const opts = await getSpeechOptions("en-US");
-      Speech.speak(text, { language: "en-US", voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
-      setWords(await loadWords());
+      Speech.stop();
+    } catch {}
+
+    try {
+      Speech.speak(text, {
+        language: "en-US",
+        voice: opts?.voice,
+        rate: opts?.rate,
+        pitch: opts?.pitch,
+      });
+    } catch (err) {
+      console.error("speech speak failed", err);
     }
+
+    void (async () => {
+      try {
+        await bumpReview(en);
+        setWords(await loadWords());
+      } catch (err) {
+        console.error("update review after speak failed", err);
+      }
+    })();
   };
 
   const onOpenDetail = async (en: string) => {
