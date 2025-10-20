@@ -4,6 +4,8 @@ import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 
+import { loadTags, loadWords, saveTags, saveWords, type Word } from './storage';
+
 // Minimal Google Drive helpers for appDataFolder backup/restore.
 // These functions expect a valid OAuth access token with scope
 // https://www.googleapis.com/auth/drive.appdata
@@ -39,14 +41,75 @@ export async function buildBackupPayload(): Promise<{ schemaVersion: number; upd
 }
 
 export async function applyBackupPayload(obj: any): Promise<void> {
-  if (!obj || typeof obj !== 'object' || typeof obj.payload !== 'object') return;
-  const pairs: [string, string][] = [];
-  for (const k of Object.keys(obj.payload)) {
-    const v = obj.payload[k];
-    if (v == null) continue;
-    pairs.push([k, String(v)]);
+  if (!obj || typeof obj !== 'object' || typeof obj.payload !== 'object') {
+    throw new Error('備份檔案格式不正確（缺少 payload）。');
   }
-  if (pairs.length > 0) await AsyncStorage.multiSet(pairs);
+
+  const payload = obj.payload as Record<string, unknown>;
+  const toRemove: string[] = [];
+  const toSet: [string, string][] = [];
+
+  for (const key of Object.keys(payload)) {
+    const value = payload[key];
+    if (value === null || value === undefined) {
+      toRemove.push(key);
+      continue;
+    }
+    if (typeof value === 'string') {
+      toSet.push([key, value]);
+      continue;
+    }
+    try {
+      toSet.push([key, JSON.stringify(value)]);
+    } catch (error) {
+      console.warn('[backup] 無法序列化備份欄位', key, error);
+    }
+  }
+
+  if (toRemove.length > 0) {
+    await AsyncStorage.multiRemove(toRemove);
+  }
+  if (toSet.length > 0) {
+    await AsyncStorage.multiSet(toSet);
+  }
+
+  const touchedKeys = new Set(Object.keys(payload));
+  if (touchedKeys.has('@halo_words')) {
+    const rawWords = payload['@halo_words'];
+    if (typeof rawWords === 'string') {
+      try {
+        const parsed = JSON.parse(rawWords);
+        if (Array.isArray(parsed)) {
+          await saveWords(parsed as Word[]);
+        }
+      } catch (error) {
+        console.warn('[backup] 匯入單字資料解析失敗，改用既有正規化流程', error);
+        const normalizedFallback = await loadWords();
+        await saveWords(normalizedFallback);
+      }
+    } else {
+      const normalizedFallback = await loadWords();
+      await saveWords(normalizedFallback);
+    }
+  }
+  if (touchedKeys.has('@halo_tags')) {
+    const rawTags = payload['@halo_tags'];
+    if (typeof rawTags === 'string') {
+      try {
+        const parsed = JSON.parse(rawTags);
+        if (Array.isArray(parsed)) {
+          await saveTags(parsed as string[]);
+        }
+      } catch (error) {
+        console.warn('[backup] 匯入標籤資料解析失敗，改用既有正規化流程', error);
+        const tagsFallback = await loadTags();
+        await saveTags(tagsFallback);
+      }
+    } else {
+      const tagsFallback = await loadTags();
+      await saveTags(tagsFallback);
+    }
+  }
 }
 
 async function findExisting(token: string): Promise<string | undefined> {
