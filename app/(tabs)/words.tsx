@@ -1,7 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Button, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWordFontSize } from "@/utils/storage";
 import * as Speech from "expo-speech";
@@ -42,16 +42,30 @@ export default function Words() {
     }, [])
   );
 
+  const deleteAndPersist = async (target: string) => {
+    const next = (await loadWords()).filter((w) => w.en !== target);
+    await saveWords(next);
+    setWords(next);
+  };
+
   const removeWord = (target: string) => {
-    Alert.alert(t('words.confirmDelete.title'), t('words.confirmDelete.message', { word: target }), [
-      { text: t('common.cancel') },
+    const title = t("words.confirmDelete.title");
+    const message = t("words.confirmDelete.message", { word: target });
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        deleteAndPersist(target).catch((err) => console.error("delete word failed", err));
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: t('common.delete'),
+        text: t("common.delete"),
         style: "destructive",
-        onPress: async () => {
-          const next = (await loadWords()).filter((w) => w.en !== target);
-          await saveWords(next);
-          setWords(next);
+        onPress: () => {
+          deleteAndPersist(target).catch((err) => console.error("delete word failed", err));
         },
       },
     ]);
@@ -163,16 +177,6 @@ export default function Words() {
         onChangeText={setSearch}
         returnKeyType="search"
       />
-      <View style={styles.addRow}>
-        <Button
-          title={t('words.add')}
-          onPress={() => {
-            router.push("/add");
-          }}
-        />
-        <View style={{ width: 10 }} />
-        <Button title={t('words.import')} onPress={() => router.push("/(tabs)/reading")} />
-      </View>
       <View style={styles.sortRow}>
         <Button title={sortDesc ? t('words.sort.new2old') : t('words.sort.old2new')} onPress={() => setSortDesc((v) => !v)} />
       </View>
@@ -185,7 +189,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
   searchInput: { width: "100%", borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, backgroundColor: "#fff", marginBottom: 8 },
-  addRow: { marginBottom: 8, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10 },
   sortRow: { marginBottom: 8, alignSelf: "flex-start" },
   item: { padding: 12, backgroundColor: "#f5f7fb", borderRadius: 12 },
   topArea: { marginBottom: 8 },

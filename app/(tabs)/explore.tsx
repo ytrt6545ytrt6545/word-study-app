@@ -15,9 +15,6 @@ const AI_ALERT_BODY_PREFIX =
   "\u0041\u0049\u0020\u5df2\u56de\u50b3\u8cc7\u6599\uff0c\u4f46\u627e\u4e0d\u5230\u53ef\u586b\u5165\u7684\u6b04\u4f4d\u3002\u000a\u56de\u50b3\u7247\u6bb5\uff1a";
 const AI_NOTE_UPDATED_PREFIX = "\u0041\u0049\u003a\u0020\u5df2\u66f4\u65b0\u0020\u2192\u0020";
 const AI_NOTE_FAILED_PREFIX = "\u0041\u0049\u003a\u0020\u5931\u6557\u0020";
-const AI_RESPONSE_TITLE = "\u0041\u0049\u0020\u56de\u61c9";
-const AI_RESPONSE_PLACEHOLDER = "\u6309\u4e0b\u0020\u0041\u0049\u0020\u88dc\u9f4a\u5f8c\uff0c\u9019\u88e1\u6703\u986f\u793a\u539f\u59cb\u56de\u61c9\u0020\u004a\u0053\u004f\u004e";
-
 export default function Explore() {
   const router = useRouter();
   const { setMarkedTab } = useTabMark();
@@ -31,7 +28,6 @@ export default function Explore() {
   const [exZh, setExZh] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiNote, setAiNote] = useState<string>("");
-  const [aiRaw, setAiRaw] = useState<string>("");
   const [zhHeight, setZhHeight] = useState(40);
   const [exEnHeight, setExEnHeight] = useState(40);
   const [exZhHeight, setExZhHeight] = useState(40);
@@ -57,7 +53,6 @@ export default function Explore() {
     setExEn("");
     setExZh("");
     setAiNote("");
-    setAiRaw("");
     setZhHeight(40);
     setExEnHeight(40);
     setExZhHeight(40);
@@ -119,11 +114,6 @@ export default function Explore() {
 
       const prev = { en, zh, exEn, exZh };
       const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
-      try {
-        setAiRaw(JSON.stringify(res, null, 2));
-      } catch {
-        setAiRaw(String(res));
-      }
       try {
         // eslint-disable-next-line no-console
         console.log("[Explore] AI response", res);
@@ -232,21 +222,6 @@ export default function Explore() {
         </View>
         {!!aiNote && <Text style={{ color: "#666", marginBottom: 8 }}>{aiNote}</Text>}
         <Button title={t("explore.add")} onPress={addWord} />
-        <View style={{ marginTop: 10 }}>
-          <Text style={{ marginBottom: 6, color: "#333", fontWeight: "bold" }}>{AI_RESPONSE_TITLE}</Text>
-          <TextInput
-            style={[
-              styles.input,
-              styles.inputMultiline,
-              { height: Math.max(100, Math.min(260, (aiRaw.split("\n").length + 1) * 18)) },
-            ]}
-            value={aiRaw}
-            multiline
-            editable={false}
-            scrollEnabled
-            placeholder={AI_RESPONSE_PLACEHOLDER}
-          />
-        </View>
         {defaultTag ? (
           <View style={{ marginTop: 10 }}>
             <Button title={t("explore.backToTag")} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: defaultTag } })} />

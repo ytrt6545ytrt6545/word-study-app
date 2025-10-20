@@ -20,6 +20,8 @@ const dict = {
     'common.save': '儲存',
     'common.play': '播放',
     'common.playing': '播放中...',
+    'common.loading': '載入中...',
+    'common.submit': '送出',
     'common.ok': '確定',
     'common.again': '再一次',
     'common.back': '返回',
@@ -146,6 +148,18 @@ const dict = {
     'review.next': '下一題',
     'review.removeReviewTag': '太熟了，移除複習標籤',
 
+    // Exam
+    'exam.word.title': '單字考試',
+    'exam.word.progress': '第 {index} 題／共 {total} 題',
+    'exam.word.noChinese': '（無中文翻譯）',
+    'exam.word.speak': '朗讀',
+    'exam.word.input.placeholder': '輸入英文單字，按 Enter 確認',
+    'exam.word.removeTag': '移除考試標籤',
+    'exam.word.correct': '答對了！',
+    'exam.word.wrong': '寫拼錯了',
+    'exam.word.empty.title': '沒有考試範圍的單字',
+    'exam.word.empty.hint': '請回到「標籤」頁，將需要考試的單字加入 {tag} 標籤',
+
     // Reading
     'reading.toolbar.pickFile': '開啟 TXT',
     'reading.toolbar.clear': '清空',
@@ -179,6 +193,8 @@ const dict = {
     'common.save': 'Save',
     'common.play': 'Play',
     'common.playing': 'Playing...',
+    'common.loading': 'Loading...',
+    'common.submit': 'Submit',
     'common.ok': 'OK',
     'common.again': 'Again',
     'common.back': 'Back',
@@ -297,6 +313,18 @@ const dict = {
     'review.hearAgain': 'Hear again',
     'review.next': 'Next',
     'review.removeReviewTag': 'Too easy, remove Review tag',
+
+    // Exam
+    'exam.word.title': 'Word Exam',
+    'exam.word.progress': 'Question {index} / {total}',
+    'exam.word.noChinese': '(No Chinese translation)',
+    'exam.word.speak': 'Speak',
+    'exam.word.input.placeholder': 'Type the English word and press Enter to submit',
+    'exam.word.removeTag': 'Remove exam tag',
+    'exam.word.correct': 'Correct!',
+    'exam.word.wrong': 'Spelling is incorrect',
+    'exam.word.empty.title': 'No words marked for exam',
+    'exam.word.empty.hint': 'Go back to the Tags tab and add the exam tag ({tag}) to the words you need.',
 
     // Reading
     'reading.toolbar.pickFile': 'Open TXT',

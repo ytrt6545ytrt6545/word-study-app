@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { defaultSrs, SrsState, updateSrs } from "./srs";
 
+// 儲存層核心模組：負責標籤階層、SRS 計算、每日限制與偏好設定等資料操作，
+// 所有頁面都應透過這裡提供的非同步函式存取本地資料。
+
 // ---- Hierarchical tag helpers (path string, max 3 levels) ----
 export const TAG_DELIM = ">"; // display as: A > B > C
 
@@ -133,6 +136,27 @@ function normalizeSystemTagName(name: string): string {
   return name;
 }
 
+const UNICODE_ESCAPE_RE = /\\[uU]([0-9a-fA-F]{4})/g;
+
+const decodeUnicodeEscapes = (value: string): string => {
+  if (!value) return value;
+  if (!value.includes("\\u") && !value.includes("\\U")) return value;
+  return value.replace(UNICODE_ESCAPE_RE, (_, hex: string) => {
+    const code = Number.parseInt(hex, 16);
+    return Number.isNaN(code) ? `\\u${hex}` : String.fromCharCode(code);
+  });
+};
+
+const normalizeRequiredText = (value: any): string => {
+  if (typeof value !== "string") return "";
+  return decodeUnicodeEscapes(value);
+};
+
+const normalizeOptionalText = <T extends string | undefined>(value: any): T => {
+  if (typeof value !== "string") return undefined as T;
+  return decodeUnicodeEscapes(value) as T;
+};
+
 export type WordStatus = "unknown" | "learning" | "mastered";
 export type Word = {
   en: string;
@@ -184,6 +208,11 @@ export async function loadWords(): Promise<Word[]> {
     const tags = Array.from(tagsSet);
     const base: Word = {
       ...w,
+      en: normalizeRequiredText((w as any).en),
+      zh: normalizeRequiredText((w as any).zh),
+      exampleEn: normalizeOptionalText<string | undefined>((w as any).exampleEn),
+      exampleZh: normalizeOptionalText<string | undefined>((w as any).exampleZh),
+      note: normalizeOptionalText<string | undefined>((w as any).note),
       createdAt: (w as any).createdAt || nowIso,
       reviewCount: typeof (w as any).reviewCount === "number" ? (w as any).reviewCount : 0,
       tags,

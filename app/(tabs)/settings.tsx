@@ -1,10 +1,10 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { loadSpeechSettings, listVoices, TtsVoice, loadVoiceSelection, saveVoiceForLang, saveRatePercent, getSpeechOptions, loadZhRate, saveZhRate, loadPitchPercent, savePitchPercent } from "@/utils/tts";
 import * as Speech from "expo-speech";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Picker } from "@react-native-picker/picker";
-import Slider from "@react-native-community/slider";
+import Slider from "@/components/ui/Slider";
 import { getSrsLimits, saveSrsLimits, getWordFontSize, saveWordFontSize } from "@/utils/storage";
 import { useI18n } from "@/i18n";
 import { Locale } from "@/i18n";
@@ -34,28 +34,36 @@ export default function Settings() {
   const [dailyReviewLimit, setDailyReviewLimit] = useState<number>(100);
   const [wordFontSize, setWordFontSize] = useState<number>(18);
   const [zhRate, setZhRate] = useState<number>(1.0);
+  const refreshAllData = useCallback(() => {
+    if (typeof window !== "undefined" && (window as any).haloWord?.refreshAll) {
+      try { (window as any).haloWord.refreshAll(); } catch {}
+    }
+  }, []);
+
+  const hydrateSettings = useCallback(async () => {
+    try {
+      setLoadingVoices(true);
+      const speech = await loadSpeechSettings();
+      setRatePercent(speech.ratePercent);
+      setPitchPercent(await loadPitchPercent());
+      const voicesList = await listVoices();
+      setVoices(voicesList);
+      const selections = await loadVoiceSelection();
+      setVoiceEn(selections.voiceEn);
+      setVoiceZh(selections.voiceZh);
+      const limits = await getSrsLimits();
+      setDailyNewLimit(limits.dailyNewLimit);
+      setDailyReviewLimit(limits.dailyReviewLimit);
+      setWordFontSize(await getWordFontSize());
+      setZhRate(await loadZhRate());
+    } finally {
+      setLoadingVoices(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const s = await loadSpeechSettings();
-        setRatePercent(s.ratePercent);
-        setPitchPercent(await loadPitchPercent());
-        const vs = await listVoices();
-        setVoices(vs);
-        const sel = await loadVoiceSelection();
-        setVoiceEn(sel.voiceEn);
-        setVoiceZh(sel.voiceZh);
-        const limits = await getSrsLimits();
-        setDailyNewLimit(limits.dailyNewLimit);
-        setDailyReviewLimit(limits.dailyReviewLimit);
-        setWordFontSize(await getWordFontSize());
-        setZhRate(await loadZhRate());
-      } finally {
-        setLoadingVoices(false);
-      }
-    })();
-  }, []);
+    hydrateSettings();
+  }, [hydrateSettings]);
 
   const enVoices = useMemo(
     () => voices.filter((v) => (v.language || "").toLowerCase().startsWith("en")),
@@ -113,7 +121,7 @@ export default function Settings() {
     try {
       Speech.stop();
     } catch {}
-    const text = lang === "en" ? "take an example" : "這是一段示例";
+    const text = lang === "en" ? "take an example" : "這是一句示範語音";
     const langCode = lang === "en" ? "en-US" : "zh-TW";
     const opts = await getSpeechOptions(langCode);
     Speech.speak(text, { language: langCode, voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
@@ -166,7 +174,7 @@ export default function Settings() {
       if (response?.type === "success") {
         const token = response.authentication?.accessToken ?? null;
         setAccessToken(token);
-        if (token) Alert.alert("Google 登入", "登入成功，已授權存取 App Data Folder。");
+        if (token) Alert.alert("Google 登入", "登入成功，已取得存取 App Data Folder 的權限。");
       } else if (response?.type === "error") {
         const detail = (response as any)?.error || (response as any)?.params?.error || "error";
         const desc = (response as any)?.params?.error_description || "";
@@ -176,7 +184,7 @@ export default function Settings() {
 
     const onSignIn = async () => {
       if (!request) {
-        Alert.alert("Google 登入", "登入請求尚未就緒，請稍後再試。");
+        Alert.alert("Google 登入", "登入請求尚未準備完成，請稍後再試。");
         return;
       }
       await promptAsync();
@@ -206,7 +214,10 @@ export default function Settings() {
             <Text style={styles.dim}>redirectUri: {redirectUri}</Text>
           </View>
         ) : null}
-        <Button title="顯示詳細" onPress={() => setShowDebug((s) => !s)} />
+        <Button
+          title={showDebug ? "隱藏除錯資訊" : "顯示除錯資訊"}
+          onPress={() => setShowDebug((s) => !s)}
+        />
       </View>
     );
   };
@@ -220,7 +231,7 @@ export default function Settings() {
       setBusy(true);
       const payload = await buildBackupPayload();
       await uploadBackupToDrive(accessToken, payload);
-      Alert.alert("備份", "已備份至 Google 雲端（App Data Folder）。");
+      Alert.alert("備份", "已備份到 Google 雲端（App Data Folder）。");
     } catch (e: any) {
       Alert.alert("備份失敗", String(e?.message || e));
     } finally {
@@ -237,11 +248,11 @@ export default function Settings() {
       setBusy(true);
       const obj = await downloadLatestBackupFromDrive(accessToken);
       if (!obj) {
-        Alert.alert("還原", "找不到備份。");
+        Alert.alert("還原", "找不到備份檔。");
         return;
       }
       await applyBackupPayload(obj);
-      Alert.alert("還原完成", "已套用備份，建議重新啟動 App。");
+      Alert.alert("還原完成", "已套用備份，請重新啟動 App。");
     } catch (e: any) {
       Alert.alert("還原失敗", String(e?.message || e));
     } finally {
@@ -253,9 +264,10 @@ export default function Settings() {
     try {
       setBusy(true);
       const msg = await exportBackupToDevice();
-      Alert.alert("本機匯出", msg);
+      Alert.alert("匯出成功", msg);
+      refreshAllData();
     } catch (e: any) {
-      Alert.alert("本機匯出失敗", String(e?.message || e));
+      Alert.alert("匯出失敗", String(e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -266,13 +278,14 @@ export default function Settings() {
       setBusy(true);
       const obj = await importBackupFromDevice();
       if (!obj) {
-        Alert.alert("本機還原", "未選擇檔案。");
+        Alert.alert("匯入已取消", "沒有選擇檔案。");
         return;
       }
       await applyBackupPayload(obj);
-      Alert.alert("本機還原完成", "已套用備份，建議重新啟動 App。");
+      refreshAllData();
+      Alert.alert("匯入成功", "已套用備份，資料已更新。");
     } catch (e: any) {
-      Alert.alert("本機還原失敗", String(e?.message || e));
+      Alert.alert("匯入失敗", String(e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -285,15 +298,15 @@ export default function Settings() {
 
         <Text style={styles.sectionTitle}>本機備份 / 還原</Text>
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-          <Button title={busy ? "匯出中…" : "匯出到本機"} onPress={onExportLocal} disabled={busy} />
-          <Button title={busy ? "匯入中…" : "從本機匯入"} onPress={onImportLocal} disabled={busy} />
+          <Button title={busy ? "匯出中…" : "匯出到裝置"} onPress={onExportLocal} disabled={busy} />
+          <Button title={busy ? "匯入中…" : "從裝置匯入"} onPress={onImportLocal} disabled={busy} />
         </View>
 
         <Text style={styles.sectionTitle}>Google 雲端備份</Text>
         {ENABLE_GOOGLE_SIGNIN && mounted ? (
           <AuthSection />
         ) : (
-          <Text style={styles.dim}>目前僅提供本機備份，Google 功能暫停使用。</Text>
+          <Text style={styles.dim}>目前僅支援備份到 Google 帳號。</Text>
         )}
 
         <Text style={styles.sectionTitle}>{t("settings.language")}</Text>
@@ -437,7 +450,7 @@ export default function Settings() {
         )}
 
         <View style={{ marginTop: 12 }}>
-          <Button title="重新播放預設英文語音" onPress={() => onPreviewVoice("en")} />
+          <Button title={t("settings.previewEn")} onPress={() => onPreviewVoice("en")} />
         </View>
 
         <View style={{ marginTop: 12 }}>
@@ -465,3 +478,4 @@ const styles = StyleSheet.create({
   voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: "#333" },
   dim: { color: "#666" },
 });
+

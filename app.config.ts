@@ -45,7 +45,6 @@ const projectConfig: ExpoConfig = {
     bundleIdentifier: "com.bwcyst.chiwordstudy",
   },
   android: {
-    appName: "en-study",
     versionCode: androidVersionCode,
     package: "com.bwcyst.chiwordstudy",
     adaptiveIcon: {
@@ -96,7 +95,7 @@ const projectConfig: ExpoConfig = {
     eas: {
       projectId: "4726f1b8-456d-47d3-829a-4d682802dce9",
     },
-    buildDate: process.env.EXPO_PUBLIC_BUILD_DATE,
+    buildDate: process.env.EXPO_PUBLIC_BUILD_DATE ?? new Date().toISOString(),
     openaiApiKey: requireEnv("EXPO_PUBLIC_OPENAI_API_KEY", { optional: true }),
   },
   owner: "bwcyst",

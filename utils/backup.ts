@@ -105,27 +105,59 @@ export async function downloadLatestBackupFromDrive(token: string): Promise<any 
 export async function exportBackupToDevice(): Promise<string> {
   const dataObj = await buildBackupPayload();
   const json = JSON.stringify(dataObj, null, 2);
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const yyyy = String(now.getFullYear());
+  const stamp = now.getTime();
+  const fileName = `${mm}-${dd}-${yyyy}-en-study-backup-${stamp}.json`;
 
-  // Android: let user pick a directory and write with SAF
+  const triggerRefresh = () => {
+    if (typeof window !== 'undefined' && (window as any).haloWord?.refreshAll) {
+      try { (window as any).haloWord.refreshAll(); } catch {}
+    }
+  };
+
+  if (Platform.OS === 'web') {
+    try {
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      triggerRefresh();
+      return '已下載備份檔：' + fileName;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err ?? '');
+      throw new Error('瀏覽器下載失敗：' + message);
+    }
+  }
+
   if (Platform.OS === 'android') {
     const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (!perm.granted) throw new Error('已取消目錄授權');
-    const name = `en-study-backup-${Date.now()}.json`;
+    if (!perm.granted) throw new Error('未授予資料夾權限');
     const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
       perm.directoryUri,
-      name,
+      fileName,
       'application/json'
     );
     await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
-    return '已匯出到: ' + name;
+    triggerRefresh();
+    return '已匯出檔案：' + fileName;
   }
 
-  // iOS/others: export via share sheet
-  const tmp = FileSystem.cacheDirectory + `en-study-backup-${Date.now()}.json`;
+  const tmp = FileSystem.cacheDirectory + fileName;
   await FileSystem.writeAsStringAsync(tmp, json, { encoding: FileSystem.EncodingType.UTF8 });
   try { await Sharing.shareAsync(tmp, { dialogTitle: '匯出備份' }); } catch {}
-  return '已匯出備份檔';
+  triggerRefresh();
+  return '已匯出備份檔案';
 }
+
+
 
 export async function importBackupFromDevice(): Promise<any | null> {
   const res = await DocumentPicker.getDocumentAsync({

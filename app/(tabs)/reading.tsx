@@ -11,6 +11,8 @@ import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
 
 type Token = { key: string; text: string; isWord: boolean };
 
+const NETWORK_ERROR_RE = /Failed to fetch|Network request failed|NetworkError/i;
+
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   if (!text) return tokens;
@@ -39,7 +41,12 @@ async function fetchPhonetic(word: string): Promise<string | null> {
   const target = word.trim().toLowerCase();
   if (!target) return null;
   const url = 'https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(target);
-  const res = await fetch(url);
+  const res = await fetch(url).catch((err: any) => {
+    if (NETWORK_ERROR_RE.test(String(err?.message ?? err))) {
+      throw new Error('Dictionary API unreachable. Please check your network and try again.');
+    }
+    throw err instanceof Error ? err : new Error(String(err));
+  });
   if (!res.ok) {
     if (res.status === 404) return null;
     const detail = await res.text().catch(() => '');
@@ -77,6 +84,7 @@ export default function ReadingScreen() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedWord, setSelectedWord] = useState<string>('');
   const [lookupState, setLookupState] = useState<LookupState | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([REVIEW_TAG]);
   const [selectedTags, setSelectedTags] = useState<string[]>([REVIEW_TAG]);
   // Reading controls
@@ -191,32 +199,37 @@ export default function ReadingScreen() {
   useEffect(() => {
     if (!selectedWord) {
       setLookupState(null);
+      setFeedback(null);
       return;
     }
     const normalized = normalizeWord(selectedWord);
     if (!normalized) {
       setLookupState(null);
+      setFeedback(null);
       return;
     }
     let cancelled = false;
     setLookupState({ word: selectedWord, normalized, loading: true });
+    setFeedback(null);
     (async () => {
       try {
         let phonetic: string | undefined;
         let phoneticError: string | undefined;
-        try {
-          const result = await fetchPhonetic(normalized);
-          phonetic = result ?? undefined;
-        } catch (err: any) {
-          phoneticError = err?.message || 'dictionary error';
-        }
-        if (cancelled) return;
         let ai: AIFillResult | undefined;
         let aiError: string | undefined;
         try {
           ai = await aiCompleteWord({ en: normalized });
+          if (ai?.phonetic) phonetic = ai.phonetic;
         } catch (err: any) {
           aiError = err?.message || 'AI error';
+        }
+        if (!phonetic) {
+          try {
+            const result = await fetchPhonetic(normalized);
+            phonetic = result ?? undefined;
+          } catch (err: any) {
+            phoneticError = err?.message || 'dictionary error';
+          }
         }
         if (cancelled) return;
         setLookupState({ word: selectedWord, normalized, loading: false, phonetic, phoneticError, ai, aiError });
@@ -227,6 +240,12 @@ export default function ReadingScreen() {
     })();
     return () => { cancelled = true; };
   }, [selectedWord]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), 2200);
+    return () => clearTimeout(timer);
+  }, [feedback]);
 
   const buildWordPayload = (baseWord: string, incomingTags: string[]): Word => {
     const trimmed = (baseWord || '').trim();
@@ -243,14 +262,18 @@ export default function ReadingScreen() {
   const handleAddWord = async () => {
     if (!lookupState?.normalized) return;
     const payload = buildWordPayload(lookupState.normalized, selectedTags);
-    const list = await loadWords();
-    if (list.some(w => w.en.toLowerCase() === payload.en.toLowerCase())) {
-      Alert.alert('提示', `${payload.en} 已在清單`);
-      return;
+    try {
+      const list = await loadWords();
+      if (list.some((w) => w.en.toLowerCase() === payload.en.toLowerCase())) {
+        setFeedback({ type: 'info', text: `${payload.en} 已在清單` });
+        return;
+      }
+      const next = [...list, payload];
+      await saveWords(next);
+      setFeedback({ type: 'success', text: `${payload.en} 已加入清單` });
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || '加入失敗，請稍後再試' });
     }
-    const next = [...list, payload];
-    await saveWords(next);
-    Alert.alert('完成', `${payload.en} 已加入清單`);
   };
 
   const speak = async (text: string) => {
@@ -452,6 +475,17 @@ export default function ReadingScreen() {
               <View style={{ width: 8 }} />
               <Button title={t('reading.modal.speak')} onPress={() => speak(selectedWord)} />
             </View>
+            {feedback ? (
+              <Text
+                style={[
+                  styles.modalFeedback,
+                  feedback.type === 'success' && styles.modalFeedbackSuccess,
+                  feedback.type === 'info' && styles.modalFeedbackInfo,
+                  feedback.type === 'error' && styles.modalFeedbackError,
+                ]}>
+                {feedback.text}
+              </Text>
+            ) : null}
             <View style={styles.modalActions}>
               <Button title={t('reading.modal.close')} onPress={() => setSelectedKey(null)} />
             </View>
@@ -502,5 +536,9 @@ const styles = StyleSheet.create({
   modalHint: { fontSize: 14, color: '#555' },
   modalError: { fontSize: 14, color: '#c62828' },
   modalButtonsRow: { flexDirection: 'row', justifyContent: 'flex-start', gap: 12 },
+  modalFeedback: { marginTop: 6, fontSize: 14, textAlign: 'left' },
+  modalFeedbackSuccess: { color: '#2e7d32' },
+  modalFeedbackInfo: { color: '#0277bd' },
+  modalFeedbackError: { color: '#c62828' },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end' },
 });
