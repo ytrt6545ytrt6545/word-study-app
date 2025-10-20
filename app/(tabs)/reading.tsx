@@ -1,4 +1,3 @@
-﻿
 import * as DocumentPicker from 'expo-document-picker';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -9,26 +8,61 @@ import { aiCompleteWord, AIFillResult } from '@/utils/ai';
 import { loadTags, loadWords, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
 
-type Token = { key: string; text: string; isWord: boolean };
+type TokenKind = 'en' | 'zh' | 'newline' | 'other';
+type Token = { key: string; text: string; kind: TokenKind };
+type ReadingChunk = {
+  text: string;
+  lang: 'en' | 'zh';
+  sentenceBreak: boolean;
+  commaBreak: boolean;
+  newlineBefore: boolean;
+  newlineAfter: boolean;
+};
 
 const NETWORK_ERROR_RE = /Failed to fetch|Network request failed|NetworkError/i;
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   if (!text) return tokens;
-  const wordRegex = /[A-Za-z][A-Za-z'-]*/g;
-  let lastIndex = 0;
+  const isEnStart = (ch: string) => /[A-Za-z]/.test(ch);
+  const isEnBody = (ch: string) => /[A-Za-z'-]/.test(ch);
+  const isZhChar = (ch: string) => /[\u3400-\u9FFF\u4E00-\u9FFF\uF900-\uFAFF]/.test(ch);
+
+  let i = 0;
   let seq = 0;
-  let match: RegExpExecArray | null;
-  while ((match = wordRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      tokens.push({ key: 'gap-' + seq++, text: text.slice(lastIndex, match.index), isWord: false });
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '\r') {
+      i += 1;
+      continue;
     }
-    tokens.push({ key: 'word-' + seq++, text: match[0], isWord: true });
-    lastIndex = wordRegex.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    tokens.push({ key: 'gap-' + seq++, text: text.slice(lastIndex), isWord: false });
+    if (ch === '\n') {
+      tokens.push({ key: `nl-${seq++}`, text: '\n', kind: 'newline' });
+      i += 1;
+      continue;
+    }
+    if (isEnStart(ch)) {
+      let j = i + 1;
+      while (j < text.length && isEnBody(text[j])) j += 1;
+      tokens.push({ key: `en-${seq++}`, text: text.slice(i, j), kind: 'en' });
+      i = j;
+      continue;
+    }
+    if (isZhChar(ch)) {
+      let j = i + 1;
+      while (j < text.length && isZhChar(text[j])) j += 1;
+      tokens.push({ key: `zh-${seq++}`, text: text.slice(i, j), kind: 'zh' });
+      i = j;
+      continue;
+    }
+    let j = i + 1;
+    while (j < text.length) {
+      const next = text[j];
+      if (next === '\n' || isEnStart(next) || isZhChar(next)) break;
+      j += 1;
+    }
+    tokens.push({ key: `gap-${seq++}`, text: text.slice(i, j), kind: 'other' });
+    i = j;
   }
   return tokens;
 }
@@ -92,7 +126,12 @@ export default function ReadingScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const [readingIndex, setReadingIndex] = useState(0);
   const [readingEndIndex, setReadingEndIndex] = useState(0);
-  const runnerRef = useRef<{ running: boolean; paused: boolean; index: number; words: string[] }>({ running: false, paused: false, index: 0, words: [] });
+  const runnerRef = useRef<{ running: boolean; paused: boolean; index: number; chunks: ReadingChunk[] }>({
+    running: false,
+    paused: false,
+    index: 0,
+    chunks: [],
+  });
 
   useEffect(() => {
     (async () => {
@@ -124,39 +163,63 @@ export default function ReadingScreen() {
   const tokens = useMemo(() => tokenize(rawText), [rawText]);
   const selectedTagsLabel = useMemo(() => selectedTags.join('、'), [selectedTags]);
   const readingMeta = useMemo(() => {
-    const words: string[] = [];
-    const sentenceEnds: boolean[] = [];
-    const commaEnds: boolean[] = [];
+    const chunks: ReadingChunk[] = [];
+    const chunkIndexByToken: Record<string, number | undefined> = Object.create(null);
+    const sentencePattern = /[\.!?;:。！？；：]/;
+    const commaPattern = /[，,、]/;
+
+    let newlinePending = false;
     for (let i = 0; i < tokens.length; i++) {
       const tk = tokens[i];
-      if (tk.isWord) {
-        words.push(tk.text);
-        // lookahead for punctuation in the following non-word token
-        let isEnd = false;
-        let isComma = false;
-        const next = tokens[i + 1];
-        if (next && !next.isWord) {
-          const seg = next.text || '';
-          if ((/[\.!?;:。！？；：]/).test(seg)) isEnd = true;     // 強停頓
-          if ((/[，,]/).test(seg)) isComma = true;               // 逗號停頓
+      if (tk.kind === 'newline') {
+        newlinePending = true;
+        continue;
+      }
+      if (tk.kind === 'en' || tk.kind === 'zh') {
+        const chunk: ReadingChunk = {
+          text: tk.text,
+          lang: tk.kind,
+          sentenceBreak: false,
+          commaBreak: false,
+          newlineBefore: newlinePending,
+          newlineAfter: false,
+        };
+        newlinePending = false;
+
+        for (let j = i + 1; j < tokens.length; j++) {
+          const next = tokens[j];
+          if (next.kind === 'other') {
+            if (sentencePattern.test(next.text)) chunk.sentenceBreak = true;
+            if (commaPattern.test(next.text)) chunk.commaBreak = true;
+            if (next.text.trim() !== '') break;
+          } else if (next.kind === 'newline') {
+            chunk.newlineAfter = true;
+            break;
+          } else if (next.kind === 'en' || next.kind === 'zh') {
+            break;
+          }
         }
-        sentenceEnds.push(isEnd);
-        commaEnds.push(isComma);
+
+        chunkIndexByToken[tk.key] = chunks.length;
+        chunks.push(chunk);
       }
     }
-    return { words, sentenceEnds, commaEnds };
+
+    return { chunks, chunkIndexByToken };
   }, [tokens]);
 
   useEffect(() => {
     // reset reading state when content changes
-    runnerRef.current.words = readingMeta.words;
+    runnerRef.current.chunks = readingMeta.chunks;
     runnerRef.current.index = 0;
+    runnerRef.current.running = false;
+    runnerRef.current.paused = false;
     setReadingIndex(0);
     setReadingEndIndex(0);
     setIsReading(false);
     setIsPaused(false);
     try { Speech.stop(); } catch {}
-  }, [readingMeta.words]);
+  }, [readingMeta.chunks]);
 
   const toggleDefaultTag = useCallback((tag: string) => {
     setSelectedTags((prev) => {
@@ -171,7 +234,25 @@ export default function ReadingScreen() {
     });
   }, []);
 
-  const onPickFile = async () => {
+  const onClearArticle = useCallback(() => {
+    try { Speech.stop(); } catch {}
+    runnerRef.current.running = false;
+    runnerRef.current.paused = false;
+    runnerRef.current.index = 0;
+    runnerRef.current.chunks = [];
+    setRawText('');
+    setFileName(null);
+    setSelectedKey(null);
+    setSelectedWord('');
+    setLookupState(null);
+    setFeedback(null);
+    setIsReading(false);
+    setIsPaused(false);
+    setReadingIndex(0);
+    setReadingEndIndex(0);
+  }, []);
+
+  const onPickFile = useCallback(async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({ type: 'text/plain', multiple: false });
       // Expo SDK 53: result has `canceled` and `assets`
@@ -179,15 +260,25 @@ export default function ReadingScreen() {
       const file = (res as any).assets?.[0];
       if (!file) return;
       const textContent = await fetch(file.uri).then((r) => r.text());
+      try { Speech.stop(); } catch {}
+      runnerRef.current.running = false;
+      runnerRef.current.paused = false;
+      runnerRef.current.index = 0;
+      runnerRef.current.chunks = [];
+      setIsReading(false);
+      setIsPaused(false);
+      setReadingIndex(0);
+      setReadingEndIndex(0);
       setRawText(textContent);
       setFileName(file.name || null);
       setSelectedKey(null);
       setSelectedWord('');
       setLookupState(null);
+      setFeedback(null);
     } catch (err: any) {
       Alert.alert(t('reading.file.readFailed'), err?.message || t('common.tryLater'));
     }
-  };
+  }, [t]);
 
   const onSelectWord = (token: Token) => {
     const normalized = normalizeWord(token.text);
@@ -285,60 +376,99 @@ export default function ReadingScreen() {
   };
 
   // TTS helpers for reading flow
-  const speakAsync = (text: string, options: Parameters<typeof Speech.speak>[1] = {}) =>
-    new Promise<void>((resolve) => {
-      try {
-        Speech.speak(text, { ...(options || {}), onDone: resolve, onStopped: resolve, onError: () => resolve() });
-      } catch {
-        resolve();
-      }
-    });
+  const speakAsync = useCallback(
+    (text: string, options: Parameters<typeof Speech.speak>[1] = {}) =>
+      new Promise<void>((resolve) => {
+        try {
+          Speech.speak(text, { ...(options || {}), onDone: resolve, onStopped: resolve, onError: () => resolve() });
+        } catch {
+          resolve();
+        }
+      }),
+    []
+  );
+
+  const wait = useCallback((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)), []);
 
   const runReading = useCallback(async () => {
     if (runnerRef.current.running) return;
     runnerRef.current.running = true;
-    const optsCfg = await getSpeechOptions('en-US');
-    const base = { language: 'en-US', voice: optsCfg.voice, rate: (optsCfg.rate || 1), pitch: optsCfg.pitch } as Parameters<typeof Speech.speak>[1];
-    const SENTENCE_GAP = 220; // 句末停頓；句中連續讀
-    const words = runnerRef.current.words;
-    const ends = readingMeta.sentenceEnds;
-    const commas = (readingMeta as any).commaEnds || [];
-    while (runnerRef.current.index < words.length) {
-      if (runnerRef.current.paused) {
-        await new Promise((r) => setTimeout(r, 120));
-        continue;
+    try {
+      const [enOpts, zhOpts, pauseCfg] = await Promise.all([
+        getSpeechOptions('en-US'),
+        getSpeechOptions('zh-TW'),
+        loadPauseConfig(),
+      ]);
+      const baseEn = {
+        language: 'en-US',
+        voice: enOpts.voice,
+        rate: enOpts.rate || 1,
+        pitch: enOpts.pitch,
+      } as Parameters<typeof Speech.speak>[1];
+      const baseZh = {
+        language: 'zh-TW',
+        voice: zhOpts.voice,
+        rate: zhOpts.rate || 1,
+        pitch: zhOpts.pitch,
+      } as Parameters<typeof Speech.speak>[1];
+      const { commaMs, sentenceMs } = pauseCfg;
+      const LINE_BREAK_GAP = 1000;
+      const chunks = runnerRef.current.chunks;
+
+      while (runnerRef.current.index < chunks.length) {
+        if (runnerRef.current.paused) {
+          await wait(120);
+          continue;
+        }
+        const start = runnerRef.current.index;
+        const firstChunk = chunks[start];
+        if (!firstChunk) break;
+        const lang = firstChunk.lang;
+        let end = start + 1;
+        for (let j = start; j < chunks.length; j++) {
+          const current = chunks[j];
+          const next = chunks[j + 1];
+          end = j + 1;
+          if (current.sentenceBreak || current.commaBreak || current.newlineAfter) break;
+          if (next?.newlineBefore) { end = j + 1; break; }
+          if (!next || next.lang !== lang) { break; }
+          end = j + 2;
+        }
+
+        setReadingIndex(start);
+        setReadingEndIndex(end);
+
+        const segment = chunks.slice(start, end);
+        const phrase = lang === 'zh'
+          ? segment.map((c) => c.text).join('')
+          : segment.map((c) => c.text).join(' ');
+        const speakOptions = lang === 'zh' ? baseZh : baseEn;
+
+        await speakAsync(phrase, speakOptions);
+        if (runnerRef.current.paused) continue;
+
+        runnerRef.current.index = end;
+        const last = chunks[end - 1];
+        if (last?.sentenceBreak) await wait(sentenceMs);
+        else if (last?.commaBreak) await wait(commaMs);
+        if (last?.newlineAfter) await wait(LINE_BREAK_GAP);
       }
-      const start = runnerRef.current.index;
-      setReadingIndex(start);
-      // 片語：從當前到下一個標點，若無則至結尾
-      let end = words.length;
-      for (let j = start; j < words.length; j++) {
-        if (ends[j] || commas[j]) { end = j + 1; break; }
+    } finally {
+      runnerRef.current.running = false;
+      if (runnerRef.current.index >= runnerRef.current.chunks.length) {
+        setIsReading(false);
+        setIsPaused(false);
       }
-      setReadingEndIndex(end);
-      const phrase = words.slice(start, end).join(' ');
-      await speakAsync(phrase, base);
-      if (runnerRef.current.paused) {
-        // Do not advance index when paused; keep current index
-        continue;
-      }
-      runnerRef.current.index = end;
-      // 句末與逗號停頓
-      // 句末與逗號停頓
-      if (ends[end - 1]) await new Promise((r) => setTimeout(r, SENTENCE_GAP));
-      else if (commas[end - 1]) await new Promise((r) => setTimeout(r, 120));
     }
-    setIsReading(false);
-    setIsPaused(false);
-  }, [readingMeta.sentenceEnds]);
+  }, [speakAsync, wait]);
 
   const onStartReading = useCallback(async () => {
-    if (readingMeta.words.length === 0) {
+    if (readingMeta.chunks.length === 0) {
       Alert.alert('朗讀', '請先貼上或輸入文章內容');
       return;
     }
     try { Speech.stop(); } catch {}
-    runnerRef.current.words = readingMeta.words;
+    runnerRef.current.chunks = readingMeta.chunks;
     runnerRef.current.index = 0;
     runnerRef.current.paused = false;
     setReadingIndex(0);
@@ -346,7 +476,7 @@ export default function ReadingScreen() {
     setIsReading(true);
     setIsPaused(false);
     runReading();
-  }, [readingMeta.words, runReading]);
+  }, [readingMeta.chunks, runReading]);
 
   const onPauseReading = useCallback(() => {
     if (!isReading || runnerRef.current.paused) return;
@@ -366,6 +496,11 @@ export default function ReadingScreen() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         {!!fileName && <Text style={styles.fileName}>{t('reading.file.from', { name: fileName })}</Text>}
+        <View style={styles.actionRow}>
+          <Button title={t('reading.toolbar.pickFile')} onPress={onPickFile} />
+          <View style={{ width: 8 }} />
+          <Button title={t('reading.toolbar.clear')} onPress={onClearArticle} disabled={!rawText && !fileName} />
+        </View>
         <TextInput
           style={styles.textInput}
           placeholder={t('reading.placeholder.input')}
@@ -405,26 +540,36 @@ export default function ReadingScreen() {
             <Text style={styles.sectionTitle}>{t('reading.section.article')}</Text>
             <View style={styles.articleBox}>
               <Text style={styles.articleText}>
-                {(() => {
-                  let wordIdx = 0;
-                  return tokens.map((token) => {
-                    if (token.isWord) {
-                      const isActive = isReading && wordIdx >= readingIndex && wordIdx < readingEndIndex;
-                      const node = (
-                        <Text
-                          key={token.key}
-                          style={[styles.word, isActive && styles.wordActive]}
-                          onPress={() => onSelectWord(token)}
-                          suppressHighlighting>
-                          {token.text}
-                        </Text>
-                      );
-                      wordIdx++;
-                      return node;
-                    }
-                    return <Text key={token.key} style={styles.nonWord}>{token.text}</Text>;
-                  });
-                })()}
+                {tokens.map((token) => {
+                  const chunkIdx = readingMeta.chunkIndexByToken[token.key];
+                  const isActive = isReading && typeof chunkIdx === 'number' && chunkIdx >= readingIndex && chunkIdx < readingEndIndex;
+
+                  if (token.kind === 'en') {
+                    return (
+                      <Text
+                        key={token.key}
+                        style={[styles.word, isActive && styles.wordActive]}
+                        onPress={() => onSelectWord(token)}
+                        suppressHighlighting>
+                        {token.text}
+                      </Text>
+                    );
+                  }
+
+                  if (token.kind === 'zh') {
+                    return (
+                      <Text key={token.key} style={[styles.wordZh, isActive && styles.wordActive]}>
+                        {token.text}
+                      </Text>
+                    );
+                  }
+
+                  return (
+                    <Text key={token.key} style={styles.nonWord}>
+                      {token.text}
+                    </Text>
+                  );
+                })}
               </Text>
             </View>
           </View>
@@ -500,12 +645,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   textInput: { minHeight: 160, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, margin: 16, backgroundColor: '#fff', textAlignVertical: 'top' },
   fileName: { marginHorizontal: 16, marginTop: 12, color: '#666' },
+  actionRow: { marginHorizontal: 16, marginTop: 12, marginBottom: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   placeholder: { marginTop: 12, color: '#888', marginHorizontal: 16 },
   articleSection: { marginTop: 20, gap: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginHorizontal: 16 },
   articleBox: { marginTop: 8, marginHorizontal: 16, padding: 14, borderWidth: 1, borderColor: '#d0d7e2', borderRadius: 10, backgroundColor: '#f7f9fc' },
   articleText: { fontSize: 18, lineHeight: 28, color: '#222' },
   word: { color: '#0d47a1' },
+  wordZh: { color: '#2e7d32' },
   wordActive: { backgroundColor: '#ffecb3', borderRadius: 4 },
   nonWord: { color: '#222' },
   toolbar: { padding: 16, borderTopWidth: 1, borderColor: '#e0e0e0', flexDirection: 'row', gap: 12 },

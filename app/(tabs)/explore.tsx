@@ -108,14 +108,12 @@ export default function Explore() {
       } catch {}
       try {
         const hasKey = !!resolveOpenAIKey();
-        // eslint-disable-next-line no-console
         console.log("[Explore] AI call start", { onlyEn, onlyZh, hasKey, en: _en, zh: _zh });
       } catch {}
 
       const prev = { en, zh, exEn, exZh };
       const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
       try {
-        // eslint-disable-next-line no-console
         console.log("[Explore] AI response", res);
       } catch {}
 

@@ -15,7 +15,7 @@ export type SliderProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
+const Slider = React.forwardRef<HTMLInputElement | null, SliderProps>(
   (
     {
       value,
@@ -36,7 +36,11 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
       value ?? minimumValue
     );
 
-    useImperativeHandle(ref, () => inputRef.current as HTMLInputElement | null, []);
+    useImperativeHandle(
+      ref,
+      () => inputRef.current as HTMLInputElement,
+      []
+    );
 
     useEffect(() => {
       if (typeof value === "number" && !Number.isNaN(value)) {
@@ -44,14 +48,14 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
       }
     }, [value]);
 
-    const flattened = StyleSheet.flatten(style) || {};
-    const width = flattened.width as number | string | undefined;
-    const height = flattened.height as number | string | undefined;
+    const flattened = StyleSheet.flatten(style) as ViewStyle | undefined;
+    const width = normalizeDimension(flattened?.width);
+    const height = normalizeDimension(flattened?.height);
 
     const wrapperStyle: React.CSSProperties = {
       display: "flex",
-      width: typeof width === "number" ? `${width}px` : width,
-      height: typeof height === "number" ? `${height}px` : height,
+      width,
+      height,
       ...pickLayoutStyles(flattened),
     };
 
@@ -99,9 +103,13 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
 
 Slider.displayName = "SliderWeb";
 
-function pickLayoutStyles(style: Record<string, unknown>): React.CSSProperties {
+function pickLayoutStyles(style?: ViewStyle): React.CSSProperties {
   const result: React.CSSProperties = {};
-  const keys: Array<keyof React.CSSProperties> = [
+  if (!style) {
+    return result;
+  }
+  const record = style as Record<string, unknown>;
+  const keys: (keyof React.CSSProperties)[] = [
     "margin",
     "marginTop",
     "marginBottom",
@@ -124,12 +132,24 @@ function pickLayoutStyles(style: Record<string, unknown>): React.CSSProperties {
     "alignSelf",
   ];
   for (const key of keys) {
-    if (style[key] !== undefined) {
-      // @ts-expect-error: assigning dynamic style keys
-      result[key] = style[key] as any;
+    const value = record[key as string];
+    if (value !== undefined) {
+      (result as Record<string, unknown>)[key as string] = value;
     }
   }
   return result;
+}
+
+function normalizeDimension(
+  value: ViewStyle["width"] | ViewStyle["height"] | null | undefined
+): string | undefined {
+  if (typeof value === "number") {
+    return `${value}px`;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return undefined;
 }
 
 export default Slider;

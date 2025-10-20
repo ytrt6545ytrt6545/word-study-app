@@ -49,7 +49,7 @@ export default function WordExam() {
       setShowCorrect(false);
       setShowWrong(false);
     }
-  }, [candidates.length]);
+  }, [candidates]);
 
   const speakWord = useCallback(async () => {
     const w = current;
@@ -73,7 +73,7 @@ export default function WordExam() {
     setInput('');
     setShowCorrect(false);
     setShowWrong(false);
-  }, [current?.en]);
+  }, [current]);
 
   const normalizedEquals = (a: string, b: string) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
 

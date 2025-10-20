@@ -347,7 +347,7 @@ export default function ReviewScreen() {
         t('review.loop.done.message'),
         [
           { text: t('review.loop.again'), onPress: () => { finishedRef.current = false; setFinished(false); setSelected(null); setQuiz(null); refillQueue(); } },
-          { text: t('review.loop.finish'), style: 'cancel', onPress: () => { const timer = setTimeout(() => { try { router.back(); } catch {} }, 3000); } },
+          { text: t('review.loop.finish'), style: 'cancel', onPress: () => { setTimeout(() => { try { router.back(); } catch {} }, 3000); } },
         ]
       );
       return;

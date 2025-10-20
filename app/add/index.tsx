@@ -76,7 +76,6 @@ export default function AddWord() {
     }
     try {
       setAiLoading(true);
-      const prev = { en, zh, exEn, exZh };
       const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
       // Update fields without showing AI raw/notes
       if (res.en !== undefined) setEn(res.en || "");
@@ -177,4 +176,3 @@ const styles = StyleSheet.create({
   rowButtons: { flexDirection: "row", gap: 10, marginBottom: 12 },
   hiddenMeasure: { position: "absolute", opacity: 0, zIndex: -1, left: 0, right: 0, includeFontPadding: true },
 });
-

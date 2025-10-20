@@ -1,6 +1,6 @@
 import { addTag, loadTags, removeTagSubtree, renameTagSubtree, REVIEW_TAG, EXAM_TAG, buildOrderedTagTree, parseTagPath, joinTagPath, reorderTagSibling, loadTagOrder, TagOrder, copyTagSubtree } from "@/utils/storage";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useI18n } from "@/i18n";
 
@@ -81,12 +81,6 @@ export default function TagsManage() {
     await refresh();
   };
 
-  const tree = useMemo(() => {
-    // ordered build via helper that reads order internally
-    // we rely on local order state only to force re-render when changed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    return tags; // placeholder to satisfy deps; actual tree built in JSX via async builder
-  }, [tags, order]);
   const [treeNodes, setTreeNodes] = useState<any[]>([]);
   useEffect(() => { (async () => setTreeNodes(await buildOrderedTagTree(tags)))(); }, [tags, order]);
   const matchesSearch = (path: string) => {

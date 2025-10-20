@@ -6,14 +6,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWordFontSize } from "@/utils/storage";
 import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
-import { useTabMark } from "@/context/TabMarkContext";
 import { useI18n } from "@/i18n";
 
 const SORT_PREF_KEY = "@word_sort_desc";
 
 export default function Words() {
   const router = useRouter();
-  const { setMarkedTab } = useTabMark();
   const { t } = useI18n();
   const [words, setWords] = useState<Word[]>([]);
   const [sortDesc, setSortDesc] = useState(true);

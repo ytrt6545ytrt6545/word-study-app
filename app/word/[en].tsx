@@ -43,7 +43,7 @@ export default function WordDetail() {
       setStatus(found.status);
       setTags(await loadTags());
     })();
-  }, [enParam, router]);
+  }, [enParam, router, t]);
 
   useEffect(() => {
     return () => {
