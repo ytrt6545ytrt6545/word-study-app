@@ -1,5 +1,6 @@
-請用中文溝通
-閱讀 README.md 了解程式
+請用中文溝通(不要刪這條)
+當我說起動WEB時請透過 Start-Process 在背景啟動(不要刪這條)
+閱讀 README.md 了解程式(不要刪這條)
 # Session Context
 
 - 專案現況：優化中，主要功能可運作

@@ -165,74 +165,141 @@ export async function downloadLatestBackupFromDrive(token: string): Promise<any 
 
 // ---- Local (device) backup/import helpers ----
 
-export async function exportBackupToDevice(): Promise<string> {
-  const dataObj = await buildBackupPayload();
-  const json = JSON.stringify(dataObj, null, 2);
-  const now = new Date();
+function formatBackupFileName(now = new Date()): string {
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
   const yyyy = String(now.getFullYear());
   const stamp = now.getTime();
-  const fileName = `${mm}-${dd}-${yyyy}-en-study-backup-${stamp}.json`;
+  return `${mm}-${dd}-${yyyy}-en-study-backup-${stamp}.json`;
+}
 
-  const triggerRefresh = () => {
-    if (typeof window !== 'undefined' && (window as any).haloWord?.refreshAll) {
-      try { (window as any).haloWord.refreshAll(); } catch {}
-    }
-  };
-
-  if (Platform.OS === 'web') {
-    try {
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      triggerRefresh();
-      return '已下載備份檔：' + fileName;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err ?? '');
-      throw new Error('瀏覽器下載失敗：' + message);
-    }
+function triggerGlobalRefresh(): void {
+  if (typeof window !== 'undefined' && (window as any).haloWord?.refreshAll) {
+    try { (window as any).haloWord.refreshAll(); } catch {}
   }
+}
 
-  if (Platform.OS === 'android') {
-    const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (!perm.granted) throw new Error('未授予資料夾權限');
-    const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-      perm.directoryUri,
-      fileName,
-      'application/json'
-    );
-    await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
-    triggerRefresh();
-    return '已匯出檔案：' + fileName;
+async function exportBackupOnWeb(json: string, fileName: string): Promise<string> {
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    triggerGlobalRefresh();
+    return '已下載備份檔：' + fileName;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err ?? '');
+    throw new Error('瀏覽器下載失敗：' + message);
   }
+}
 
-  const tmp = FileSystem.cacheDirectory + fileName;
+async function exportBackupOnAndroid(json: string, fileName: string): Promise<string> {
+  const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!perm.granted) throw new Error('未授予資料夾權限');
+  const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+    perm.directoryUri,
+    fileName,
+    'application/json'
+  );
+  await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, json, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  triggerGlobalRefresh();
+  return '已匯出檔案：' + fileName;
+}
+
+async function exportBackupViaShare(json: string, fileName: string): Promise<string> {
+  const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+  if (!baseDir) throw new Error('找不到暫存資料夾，無法建立備份檔。');
+  const tmp = baseDir + fileName;
   await FileSystem.writeAsStringAsync(tmp, json, { encoding: FileSystem.EncodingType.UTF8 });
-  try { await Sharing.shareAsync(tmp, { dialogTitle: '匯出備份' }); } catch {}
-  triggerRefresh();
+  try {
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(tmp, { dialogTitle: '匯出備份' });
+    }
+  } catch {}
+  triggerGlobalRefresh();
   return '已匯出備份檔案';
 }
 
+export async function exportBackupToDevice(): Promise<string> {
+  const dataObj = await buildBackupPayload();
+  const json = JSON.stringify(dataObj, null, 2);
+  const fileName = formatBackupFileName();
 
+  if (Platform.OS === 'web') {
+    return exportBackupOnWeb(json, fileName);
+  }
+  if (Platform.OS === 'android') {
+    return exportBackupOnAndroid(json, fileName);
+  }
+  return exportBackupViaShare(json, fileName);
+}
+
+async function readTextFromAsset(asset: any): Promise<string> {
+  if (!asset) throw new Error('沒有可讀取的檔案。');
+
+  if (asset.file && typeof asset.file === 'object') {
+    const fileObj = asset.file as any;
+    if (typeof fileObj.text === 'function') {
+      return await fileObj.text();
+    }
+    const FileReaderCtor: any = typeof globalThis !== 'undefined' ? (globalThis as any).FileReader : undefined;
+    if (typeof FileReaderCtor === 'function') {
+      const reader = new FileReaderCtor();
+      const asText = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : String(reader.result ?? ''));
+        reader.onerror = () => reject(reader.error ?? new Error('讀取檔案失敗'));
+        try { reader.readAsText(fileObj); } catch (error) { reject(error); }
+      });
+      return asText;
+    }
+  }
+
+  const uri: string | undefined = asset.uri || asset.file?.uri;
+  if (!uri) throw new Error('無法讀取檔案內容（缺少 URI）。');
+
+  if (Platform.OS === 'web' && uri.startsWith('blob:')) {
+    const res = await fetch(uri);
+    if (!res.ok) throw new Error('下載檔案內容失敗（HTTP ' + res.status + '）。');
+    return await res.text();
+  }
+
+  return await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+}
 
 export async function importBackupFromDevice(): Promise<any | null> {
-  const res = await DocumentPicker.getDocumentAsync({
+  if (Platform.OS === 'web') {
+    try {
+      const result: any = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        multiple: false,
+        copyToCacheDirectory: false,
+      });
+      if (!result || result.canceled) return null;
+      const asset = result.assets?.[0] ?? result;
+      const text = await readTextFromAsset(asset);
+      try { return JSON.parse(text); } catch { throw new Error('檔案內容不是有效的 JSON'); }
+    } catch (err: any) {
+      const message = String(err?.message || '');
+      if (message.includes('cancel')) return null;
+      throw err;
+    }
+  }
+
+  const res: any = await DocumentPicker.getDocumentAsync({
     type: 'application/json',
     multiple: false,
     copyToCacheDirectory: true,
   });
-  const asset: any = (res as any)?.assets?.[0] ?? (res as any);
-  if (!asset || asset.canceled) return null;
-  const uri: string = asset.uri || asset.file?.uri;
-  if (!uri) return null;
-  const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+  if (!res || res.canceled) return null;
+  const asset: any = res.assets?.[0] ?? res;
+  const text = await readTextFromAsset(asset);
   try { return JSON.parse(text); } catch { throw new Error('檔案內容不是有效的 JSON'); }
 }
 
