@@ -4,7 +4,9 @@ import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 
-import { loadTags, loadWords, saveTags, saveWords, type Word } from './storage';
+import { loadArticleTagOrder, loadArticleTags, loadArticles, saveArticleTagOrder, saveArticleTags, saveArticles } from './articles';
+import { loadTags, loadWords, saveTags, saveWords } from './storage';
+import type { Word } from './storage';
 
 // Minimal Google Drive helpers for appDataFolder backup/restore.
 // These functions expect a valid OAuth access token with scope
@@ -14,6 +16,9 @@ export const BACKUP_KEYS = [
   '@halo_words',
   '@halo_tags',
   '@halo_tag_order',
+  '@halo_articles',
+  '@halo_article_tags',
+  '@halo_article_tag_order',
   '@srs_limits',
   '@srs_daily_stats',
   '@pref_word_font_size',
@@ -108,6 +113,60 @@ export async function applyBackupPayload(obj: any): Promise<void> {
     } else {
       const tagsFallback = await loadTags();
       await saveTags(tagsFallback);
+    }
+  }
+  if (touchedKeys.has('@halo_articles')) {
+    const rawArticles = payload['@halo_articles'];
+    if (typeof rawArticles === 'string') {
+      try {
+        const parsed = JSON.parse(rawArticles);
+        if (Array.isArray(parsed)) {
+          await saveArticles(parsed as any[]);
+        }
+      } catch (error) {
+        console.warn('[backup] 匯入文章資料解析失敗，改用既有正規化流程', error);
+        const fallback = await loadArticles();
+        await saveArticles(fallback);
+      }
+    } else {
+      const fallback = await loadArticles();
+      await saveArticles(fallback);
+    }
+  }
+  if (touchedKeys.has('@halo_article_tags')) {
+    const rawArticleTags = payload['@halo_article_tags'];
+    if (typeof rawArticleTags === 'string') {
+      try {
+        const parsed = JSON.parse(rawArticleTags);
+        if (Array.isArray(parsed)) {
+          await saveArticleTags(parsed as string[]);
+        }
+      } catch (error) {
+        console.warn('[backup] 匯入文章標籤解析失敗，改用既有正規化流程', error);
+        const fallback = await loadArticleTags();
+        await saveArticleTags(fallback);
+      }
+    } else {
+      const fallback = await loadArticleTags();
+      await saveArticleTags(fallback);
+    }
+  }
+  if (touchedKeys.has('@halo_article_tag_order')) {
+    const rawArticleTagOrder = payload['@halo_article_tag_order'];
+    if (typeof rawArticleTagOrder === 'string') {
+      try {
+        const parsed = JSON.parse(rawArticleTagOrder);
+        if (parsed && typeof parsed === 'object') {
+          await saveArticleTagOrder(parsed as any);
+        }
+      } catch (error) {
+        console.warn('[backup] 匯入文章標籤排序失敗，改用既有正規化流程', error);
+        const fallback = await loadArticleTagOrder();
+        await saveArticleTagOrder(fallback);
+      }
+    } else {
+      const fallback = await loadArticleTagOrder();
+      await saveArticleTagOrder(fallback);
     }
   }
 }

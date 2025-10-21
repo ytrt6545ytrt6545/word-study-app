@@ -1,10 +1,12 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 
 import { useI18n } from '@/i18n';
 import { aiCompleteWord, AIFillResult } from '@/utils/ai';
+import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from '@/utils/articles';
 import { loadTags, loadWords, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
 
@@ -71,6 +73,13 @@ function normalizeWord(text: string): string {
   return text.replace(/[^A-Za-z']+/g, '').toLowerCase();
 }
 
+function sanitizeArticleTitle(input: string | null | undefined): string {
+  const value = (input || '').trim();
+  if (!value) return '';
+  if (value.length <= 80) return value;
+  return `${value.slice(0, 77)}...`;
+}
+
 async function fetchPhonetic(word: string): Promise<string | null> {
   const target = word.trim().toLowerCase();
   if (!target) return null;
@@ -121,6 +130,8 @@ export default function ReadingScreen() {
   const [feedback, setFeedback] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([REVIEW_TAG]);
   const [selectedTags, setSelectedTags] = useState<string[]>([REVIEW_TAG]);
+  const [articleSaving, setArticleSaving] = useState(false);
+  const [articleNotice, setArticleNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   // Reading controls
   const [isReading, setIsReading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -132,6 +143,12 @@ export default function ReadingScreen() {
     index: 0,
     chunks: [],
   });
+  const params = useLocalSearchParams<{ articleId?: string | string[] }>();
+  const articleIdParam = useMemo(() => {
+    const value = params.articleId;
+    if (!value) return undefined;
+    return Array.isArray(value) ? value[0] : value;
+  }, [params.articleId]);
 
   useEffect(() => {
     (async () => {
@@ -147,6 +164,12 @@ export default function ReadingScreen() {
       } catch {}
     })();
   }, []);
+
+  useEffect(() => {
+    if (!articleNotice) return;
+    const timer = setTimeout(() => setArticleNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [articleNotice]);
 
   // Blur any focused background input when modal opens (avoid aria-hidden focus issue)
   useEffect(() => {
@@ -244,13 +267,46 @@ export default function ReadingScreen() {
     setFileName(null);
     setSelectedKey(null);
     setSelectedWord('');
-    setLookupState(null);
-    setFeedback(null);
-    setIsReading(false);
-    setIsPaused(false);
-    setReadingIndex(0);
-    setReadingEndIndex(0);
-  }, []);
+  setLookupState(null);
+  setFeedback(null);
+  setIsReading(false);
+  setIsPaused(false);
+  setReadingIndex(0);
+  setReadingEndIndex(0);
+}, []);
+
+  useEffect(() => {
+    if (!articleIdParam) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const article = await getArticleById(articleIdParam);
+        if (!article) {
+          if (!cancelled) {
+            onClearArticle();
+            setArticleNotice({ kind: 'error', text: t('articles.open.missing', { id: articleIdParam }) });
+          }
+          return;
+        }
+        if (cancelled) return;
+        onClearArticle();
+        setRawText(article.rawText ?? '');
+        setFileName(article.sourceRef || article.title || null);
+        const tagsForArticle = Array.from(new Set([...(article.tags ?? []), REVIEW_TAG]));
+        setAvailableTags((prev) => Array.from(new Set([...prev, ...tagsForArticle])));
+        setSelectedTags(tagsForArticle);
+        setArticleNotice({ kind: 'success', text: t('articles.open.success', { title: article.title }) });
+      } catch (err: any) {
+        if (cancelled) return;
+        onClearArticle();
+        const message = err instanceof Error ? err.message : String(err ?? '');
+        setArticleNotice({ kind: 'error', text: t('articles.open.error', { message }) });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [articleIdParam, onClearArticle, t]);
 
   const onPickFile = useCallback(async () => {
     try {
@@ -366,6 +422,45 @@ export default function ReadingScreen() {
       setFeedback({ type: 'error', text: err?.message || '加入失敗，請稍後再試' });
     }
   };
+
+  const handleSaveArticle = useCallback(async () => {
+    const content = rawText.trim();
+    if (!content) {
+      Alert.alert(t('reading.saveArticle.empty'));
+      return;
+    }
+    const titleCandidate = sanitizeArticleTitle(fileName ? fileName.replace(/\.[^/.]+$/, '') : null);
+    const firstLine = sanitizeArticleTitle(
+      content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0) || ''
+    );
+    const title = titleCandidate || firstLine || t('reading.saveArticle.defaultTitle');
+    const tags = selectedTags.filter((tag) => !!tag);
+
+    setArticleSaving(true);
+    try {
+      const article = await createArticle({
+        title,
+        rawText: content,
+        sourceType: fileName ? 'file' : 'manual',
+        sourceRef: fileName || null,
+        tags,
+        summary: null,
+      });
+      if (tags.length > 0) {
+        const existing = await loadArticleTags();
+        await saveArticleTags([...existing, ...tags]);
+      }
+      setArticleNotice({ kind: 'success', text: t('reading.saveArticle.success', { title: article.title }) });
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : String(err ?? '');
+      setArticleNotice({ kind: 'error', text: t('reading.saveArticle.error', { message }) });
+    } finally {
+      setArticleSaving(false);
+    }
+  }, [fileName, rawText, selectedTags, t]);
 
   const speak = async (text: string) => {
     const phrase = (text || '').trim();
@@ -500,7 +595,22 @@ export default function ReadingScreen() {
           <Button title={t('reading.toolbar.pickFile')} onPress={onPickFile} />
           <View style={{ width: 8 }} />
           <Button title={t('reading.toolbar.clear')} onPress={onClearArticle} disabled={!rawText && !fileName} />
+          <View style={{ width: 8 }} />
+          <Button
+            title={articleSaving ? t('reading.saveArticle.saving') : t('reading.saveArticle.button')}
+            onPress={handleSaveArticle}
+            disabled={articleSaving || !rawText.trim()}
+          />
         </View>
+        {articleNotice ? (
+          <View
+            style={[
+              styles.articleNotice,
+              articleNotice.kind === 'success' ? styles.articleNoticeSuccess : styles.articleNoticeError,
+            ]}>
+            <Text style={styles.articleNoticeText}>{articleNotice.text}</Text>
+          </View>
+        ) : null}
         <TextInput
           style={styles.textInput}
           placeholder={t('reading.placeholder.input')}
@@ -656,6 +766,10 @@ const styles = StyleSheet.create({
   wordActive: { backgroundColor: '#ffecb3', borderRadius: 4 },
   nonWord: { color: '#222' },
   toolbar: { padding: 16, borderTopWidth: 1, borderColor: '#e0e0e0', flexDirection: 'row', gap: 12 },
+  articleNotice: { marginHorizontal: 16, marginTop: 8, padding: 12, borderRadius: 8, borderWidth: 1 },
+  articleNoticeSuccess: { backgroundColor: '#e8f5e9', borderColor: '#81c784' },
+  articleNoticeError: { backgroundColor: '#ffebee', borderColor: '#ef9a9a' },
+  articleNoticeText: { fontSize: 14, color: '#333' },
   // tags
   tagSection: { marginHorizontal: 16, marginTop: 8, borderWidth: 1, borderColor: '#d0d7e2', borderRadius: 10, backgroundColor: '#f2f6ff' },
   tagHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },

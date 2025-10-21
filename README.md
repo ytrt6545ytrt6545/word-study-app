@@ -101,6 +101,7 @@ docs/                 # 額外的中文說明文件
 ## 其他文件
 
 - `docs/overview.md`：系統架構、資料流與主要模組說明。
+- `docs/backup.md`：匯出／匯入備份的實作細節、Runbook 與常見疑難排解。
 - 建議新增 `docs/ai.md`、`docs/release.md` 等文件持續補充專案知識（可依實際需求擴充）。
 
 ## 常見問題
