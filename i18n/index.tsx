@@ -163,6 +163,7 @@ const dict = {
 
     // Reading
     'reading.toolbar.pickFile': '開啟 TXT',
+    'reading.toolbar.pickImage': '從圖片匯入',
     'reading.toolbar.clear': '清空',
     'reading.file.readFailed': '讀取檔案失敗',
     'reading.file.from': '來源：{name}',
@@ -193,6 +194,12 @@ const dict = {
     'reading.saveArticle.error': '收藏失敗：{message}',
     'reading.saveArticle.empty': '請先輸入或載入文章內容',
     'reading.saveArticle.defaultTitle': '未命名文章',
+    'reading.ocr.loading': '辨識中...',
+    'reading.ocr.success': '圖片文字已貼入輸入框。',
+    'reading.ocr.error.permission': '無法存取相簿，請開啟權限後再試。',
+    'reading.ocr.error.noData': '無法讀取這張圖片，請改選其他檔案。',
+    'reading.ocr.error.noText': '辨識不到文字，請改用其他圖片。',
+    'reading.ocr.error.generic': '辨識失敗：{message}',
 
     'articles.loadError': '讀取收藏失敗：{message}',
     'articles.delete': '刪除',
@@ -357,6 +364,7 @@ const dict = {
 
     // Reading
     'reading.toolbar.pickFile': 'Open TXT',
+    'reading.toolbar.pickImage': 'Import from image',
     'reading.toolbar.clear': 'Clear',
     'reading.file.readFailed': 'Failed to read file',
     'reading.file.from': 'Source: {name}',
@@ -387,6 +395,12 @@ const dict = {
     'reading.saveArticle.error': 'Save failed: {message}',
     'reading.saveArticle.empty': 'Please enter or load article content first.',
     'reading.saveArticle.defaultTitle': 'Untitled article',
+    'reading.ocr.loading': 'Extracting...',
+    'reading.ocr.success': 'Image text inserted.',
+    'reading.ocr.error.permission': 'Photo library access denied. Please enable permissions and try again.',
+    'reading.ocr.error.noData': 'Could not read the selected image. Please try another file.',
+    'reading.ocr.error.noText': 'No text was detected in this image.',
+    'reading.ocr.error.generic': 'Failed to extract text: {message}',
 
     'articles.loadError': 'Failed to load articles: {message}',
     'articles.delete': 'Delete',

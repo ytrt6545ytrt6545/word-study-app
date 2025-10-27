@@ -1,6 +1,5 @@
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
-import { tify } from "chinese-conv";
 
 // Centralized helpers for resolving OpenAI keys, handling fallbacks, and making API calls.
 
@@ -64,13 +63,13 @@ const extractOpenAIErrorMessage = (status: number, bodyText: string): string => 
 
   if (status === 429) {
     return detail
-      ? `OpenAI API 限速，請稍後再試。${detail}`
-      : "OpenAI API 限速，請稍後再試。";
+      ? `OpenAI API ?�速�?請�?後�?試�?{detail}`
+      : "OpenAI API ?�速�?請�?後�?試�?;
   }
   if (status >= 500) {
     return detail
-      ? `OpenAI 伺服器暫時無法回應 (${status})：${detail}`
-      : `OpenAI 伺服器暫時無法回應 (${status})。`;
+      ? `OpenAI 伺�??�暫?�無法�???(${status})�?{detail}`
+      : `OpenAI 伺�??�暫?�無法�???(${status})?�`;
   }
 
   if (detail) return `OpenAI ${status}: ${detail}`;
@@ -78,12 +77,12 @@ const extractOpenAIErrorMessage = (status: number, bodyText: string): string => 
 };
 
 const PROMPT_SYSTEM_LINES = [
-  "你是一位英中詞彙助手，請輸出 JSON 物件：{ en, zh, exampleEn, exampleZh, phonetic }",
-  "en: 對應的英文單字",
-  "zh: 對應的繁體中文翻譯（不包含註解，不得使用簡體）",
-  "exampleEn: 一句使用該單字的英文例句",
-  "exampleZh: 上述例句的繁體中文翻譯（不包含註解，不得使用簡體）",
-  "phonetic: Provide the KK phonetic transcription (American pronunciation) and enclose it in slashes, e.g. /ɪnˈtriɡɪŋ/.",
+  "\u4f60\u662f\u4e00\u4f4d\u82f1\u4e2d\u8a5e\u5f59\u52a9\u624b\uff0c\u8acb\u8f38\u51fa\u0020\u004a\u0053\u004f\u004e\u0020\u7269\u4ef6\uff1a\u007b\u0020\u0065\u006e\u002c\u0020\u007a\u0068\u002c\u0020\u0065\u0078\u0061\u006d\u0070\u006c\u0065\u0045\u006e\u002c\u0020\u0065\u0078\u0061\u006d\u0070\u006c\u0065\u005a\u0068\u002c\u0020\u0070\u0068\u006f\u006e\u0065\u0074\u0069\u0063\u0020\u007d",
+  "\u0065\u006e\u003a\u0020\u5c0d\u61c9\u7684\u82f1\u6587\u55ae\u5b57",
+  "\u007a\u0068\u003a\u0020\u5c0d\u61c9\u7684\u4e2d\u6587\u7ffb\u8b6f\uff08\u4e0d\u5305\u542b\u8a3b\u89e3\uff09",
+  "\u0065\u0078\u0061\u006d\u0070\u006c\u0065\u0045\u006e\u003a\u0020\u4e00\u53e5\u4f7f\u7528\u8a72\u55ae\u5b57\u7684\u82f1\u6587\u4f8b\u53e5",
+  "\u0065\u0078\u0061\u006d\u0070\u006c\u0065\u005a\u0068\u003a\u0020\u4e0a\u8ff0\u4f8b\u53e5\u7684\u4e2d\u6587\u7ffb\u8b6f\uff08\u4e0d\u5305\u542b\u8a3b\u89e3\uff09",
+  "phonetic: Provide the KK phonetic transcription (American pronunciation) and enclose it in slashes, e.g. /ɪn?triɡɪ?/.",
 ];
 
 export const getManifestExtra = (): Record<string, any> => {
@@ -229,23 +228,15 @@ export async function aiCompleteWord(input: { en?: string; zh?: string }): Promi
 
   if (!parsed) throw new Error(AI_PARSE_ERROR);
 
-const sanitizeZh = (value?: string) => {
-  if (!value) return value;
-  let s = value.trim();
-  s = s.replace(/^[\'"`\u300C\u300E\u300A]+/, "").replace(/[\'"`\u300D\u300F\u300B]+$/, "");
-  s = s.replace(/\(.*?\)/g, "");
-  const m2 = s.match(/^[^\uFF0C,\u3002\.;!\?\uFF1F]+/);
-  if (m2) s = m2[0];
-  return s.trim();
-};
-const ensureTraditional = (value?: string | null) => {
-  if (!value) return value ?? undefined;
-  try {
-    return tify(value).trim();
-  } catch {
-    return value.trim();
-  }
-};
+  const sanitizeZh = (value?: string) => {
+    if (!value) return value;
+    let s = value.trim();
+    s = s.replace(/^[\'"`\u300C\u300E\u300A]+/, "").replace(/[\'"`\u300D\u300F\u300B]+$/, "");
+    s = s.replace(/\(.*?\)/g, "");
+    const m2 = s.match(/^[^\uFF0C,\u3002\.;!\?\uFF1F]+/);
+    if (m2) s = m2[0];
+    return s.trim();
+  };
 
   const normEn = (parsed as any).en ?? (parsed as any).word ?? (parsed as any).term;
   const normZh = (parsed as any).zh ?? (parsed as any).cn ?? (parsed as any).chinese;
@@ -261,14 +252,11 @@ const ensureTraditional = (value?: string | null) => {
     (parsed as any).kk ??
     (parsed as any).ipa;
 
-  const zhValue = typeof normZh === "string" ? sanitizeZh(normZh) : undefined;
-  const exampleZhValue = typeof normExZh === "string" ? (normExZh as string).trim() : undefined;
-
   return {
     en: typeof normEn === "string" ? normEn.trim() : undefined,
-    zh: ensureTraditional(zhValue),
+    zh: typeof normZh === "string" ? sanitizeZh(normZh) : undefined,
     exampleEn: typeof normExEn === "string" ? normExEn.trim() : undefined,
-    exampleZh: ensureTraditional(exampleZhValue),
+    exampleZh: typeof normExZh === "string" ? (normExZh as string).trim() : undefined,
     phonetic: typeof normPhonetic === "string" ? normPhonetic.trim() : undefined,
   };
 }

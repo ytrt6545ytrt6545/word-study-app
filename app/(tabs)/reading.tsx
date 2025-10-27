@@ -1,16 +1,17 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 
 import { useI18n } from '@/i18n';
-import { aiCompleteWord, AIFillResult } from '@/utils/ai';
+import { aiCompleteWord, AIFillResult, recognizeImageText } from '@/utils/ai';
 import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from '@/utils/articles';
 import { addTag, loadTags, loadWords, normalizeTagPath, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
 
-type TokenKind = 'en' | 'zh' | 'newline' | 'other';
+type TokenKind = 'en' | 'zh' | 'number' | 'newline' | 'other';
 type Token = { key: string; text: string; kind: TokenKind };
 type ReadingChunk = {
   text: string;
@@ -19,16 +20,46 @@ type ReadingChunk = {
   commaBreak: boolean;
   newlineBefore: boolean;
   newlineAfter: boolean;
+  sourceKind: TokenKind;
 };
 
 const NETWORK_ERROR_RE = /Failed to fetch|Network request failed|NetworkError/i;
+
+const normalizeNumberForSpeech = (value: string): string => {
+  const replacements: Record<string, string> = {
+    '，': ',',
+    '．': '.',
+    '。': '.',
+    '：': ':',
+    '／': '/',
+    '％': '%',
+    '－': '-',
+    '—': '-',
+    '＋': '+',
+    '﹣': '-',
+    '﹢': '+',
+    '﹪': '%',
+  };
+  return value
+    .split('')
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      if (code >= 0xff10 && code <= 0xff19) {
+        return String.fromCharCode(0x30 + (code - 0xff10));
+      }
+      return replacements[ch] ?? ch;
+    })
+    .join('');
+};
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   if (!text) return tokens;
   const isEnStart = (ch: string) => /[A-Za-z]/.test(ch);
-  const isEnBody = (ch: string) => /[A-Za-z'-]/.test(ch);
+  const isEnBody = (ch: string) => /[A-Za-z0-9'-]/.test(ch);
   const isZhChar = (ch: string) => /[\u3400-\u9FFF\u4E00-\u9FFF\uF900-\uFAFF]/.test(ch);
+  const isNumberStart = (ch: string) => /[0-9０-９]/.test(ch);
+  const isNumberBody = (ch: string) => /[0-9０-９,，.．:：/／%％\-－+＋]/.test(ch);
 
   let i = 0;
   let seq = 0;
@@ -57,10 +88,24 @@ function tokenize(text: string): Token[] {
       i = j;
       continue;
     }
+    if (isNumberStart(ch)) {
+      let j = i + 1;
+      while (j < text.length && /[0-9]/.test(text[j])) j += 1;
+      if (j < text.length && isEnBody(text[j])) {
+        while (j < text.length && isEnBody(text[j])) j += 1;
+        tokens.push({ key: `en-${seq++}`, text: text.slice(i, j), kind: 'en' });
+        i = j;
+        continue;
+      }
+      while (j < text.length && isNumberBody(text[j])) j += 1;
+      tokens.push({ key: `num-${seq++}`, text: text.slice(i, j), kind: 'number' });
+      i = j;
+      continue;
+    }
     let j = i + 1;
     while (j < text.length) {
       const next = text[j];
-      if (next === '\n' || isEnStart(next) || isZhChar(next)) break;
+      if (next === '\n' || isEnStart(next) || isZhChar(next) || isNumberStart(next)) break;
       j += 1;
     }
     tokens.push({ key: `gap-${seq++}`, text: text.slice(i, j), kind: 'other' });
@@ -131,7 +176,7 @@ const sortTagsWithReviewFirst = (tags: Iterable<string>): string[] => {
 };
 
 export default function ReadingScreen() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [customTitle, setCustomTitle] = useState<string>('');
@@ -145,6 +190,7 @@ export default function ReadingScreen() {
   const [tagDraftError, setTagDraftError] = useState<string | null>(null);
   const [articleSaving, setArticleSaving] = useState(false);
   const [articleNotice, setArticleNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
   // Reading controls
   const [isReading, setIsReading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -214,6 +260,28 @@ export default function ReadingScreen() {
     const chunkIndexByToken: Record<string, number | undefined> = Object.create(null);
     const sentencePattern = /[\.!?;:。！？；：]/;
     const commaPattern = /[，,、]/;
+    const inferNumberLang = (idx: number): 'en' | 'zh' => {
+      const scan = (direction: -1 | 1) => {
+        let cursor = idx + direction;
+        while (cursor >= 0 && cursor < tokens.length) {
+          const look = tokens[cursor];
+          if (look.kind === 'en') return 'en';
+          if (look.kind === 'zh') return 'zh';
+          if (look.kind === 'number') {
+            cursor += direction;
+            continue;
+          }
+          if (look.kind === 'newline') break;
+          if (look.kind === 'other') {
+            if (sentencePattern.test(look.text)) break;
+          }
+          cursor += direction;
+        }
+        return null;
+      };
+      return scan(-1) ?? scan(1) ?? 'en';
+    };
+
 
     let newlinePending = false;
     for (let i = 0; i < tokens.length; i++) {
@@ -222,14 +290,16 @@ export default function ReadingScreen() {
         newlinePending = true;
         continue;
       }
-      if (tk.kind === 'en' || tk.kind === 'zh') {
+      if (tk.kind === 'en' || tk.kind === 'zh' || tk.kind === 'number') {
+        const chunkLang: 'en' | 'zh' = tk.kind === 'number' ? inferNumberLang(i) : tk.kind;
         const chunk: ReadingChunk = {
           text: tk.text,
-          lang: tk.kind,
+          lang: chunkLang,
           sentenceBreak: false,
           commaBreak: false,
           newlineBefore: newlinePending,
           newlineAfter: false,
+          sourceKind: tk.kind,
         };
         newlinePending = false;
 
@@ -242,7 +312,7 @@ export default function ReadingScreen() {
           } else if (next.kind === 'newline') {
             chunk.newlineAfter = true;
             break;
-          } else if (next.kind === 'en' || next.kind === 'zh') {
+          } else if (next.kind === 'en' || next.kind === 'zh' || next.kind === 'number') {
             break;
           }
         }
@@ -365,6 +435,78 @@ export default function ReadingScreen() {
       Alert.alert(t('reading.file.readFailed'), err?.message || t('common.tryLater'));
     }
   }, [t]);
+
+  const onPickImage = useCallback(async () => {
+    try {
+      if (ImagePicker.requestMediaLibraryPermissionsAsync) {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (permission && permission.granted === false && permission.status !== 'granted') {
+          setArticleNotice({ kind: 'error', text: t('reading.ocr.error.permission') });
+          return;
+        }
+      }
+    } catch {
+      // Web 平台可能不需要權限，忽略錯誤
+    }
+
+    let asset: ImagePicker.ImagePickerAsset | undefined;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        allowsMultipleSelection: false,
+        base64: true,
+        quality: 0.85,
+      });
+      if (result.canceled) return;
+      asset = result.assets?.[0];
+    } catch (err: any) {
+      setArticleNotice({
+        kind: 'error',
+        text: t('reading.ocr.error.generic', { message: err?.message || t('common.tryLater') }),
+      });
+      return;
+    }
+
+    if (!asset || !asset.base64) {
+      setArticleNotice({ kind: 'error', text: t('reading.ocr.error.noData') });
+      return;
+    }
+
+    let started = false;
+    try {
+      setOcrLoading(true);
+      started = true;
+      const mimeType =
+        asset.mimeType ||
+        (asset.type && asset.type.startsWith('image/') ? asset.type : undefined) ||
+        'image/jpeg';
+      const { text } = await recognizeImageText({ base64: asset.base64, mimeType, locale });
+      const normalized = (text || '').trim();
+      if (!normalized) {
+        setArticleNotice({ kind: 'error', text: t('reading.ocr.error.noText') });
+        return;
+      }
+      setRawText((prev) => {
+        const base = prev.trimEnd();
+        return base ? `${base}\n\n${normalized}` : normalized;
+      });
+      const derivedName =
+        asset.fileName ||
+        (asset.uri ? asset.uri.split(/[\\/]/).pop() : undefined) ||
+        asset.assetId ||
+        'image';
+      setFileName(derivedName);
+      setArticleNotice({ kind: 'success', text: t('reading.ocr.success') });
+    } catch (err: any) {
+      setArticleNotice({
+        kind: 'error',
+        text: t('reading.ocr.error.generic', { message: err?.message || t('common.tryLater') }),
+      });
+    } finally {
+      if (started) setOcrLoading(false);
+    }
+  }, [locale, recognizeImageText, setArticleNotice, setFileName, setRawText, t]);
 
   const onSelectWord = (token: Token) => {
     const normalized = normalizeWord(token.text);
@@ -600,9 +742,12 @@ export default function ReadingScreen() {
         setReadingEndIndex(end);
 
         const segment = chunks.slice(start, end);
+        const speechParts = segment.map((c) =>
+          c.sourceKind === 'number' ? normalizeNumberForSpeech(c.text) : c.text
+        );
         const phrase = lang === 'zh'
-          ? segment.map((c) => c.text).join('')
-          : segment.map((c) => c.text).join(' ');
+          ? speechParts.join('')
+          : speechParts.join(' ');
         const speakOptions = lang === 'zh' ? baseZh : baseEn;
 
         await speakAsync(phrase, speakOptions);
@@ -669,6 +814,12 @@ export default function ReadingScreen() {
         </View>
         <View style={styles.actionRow}>
           <Button title={t('reading.toolbar.pickFile')} onPress={onPickFile} />
+          <View style={{ width: 8 }} />
+          <Button
+            title={ocrLoading ? t('reading.ocr.loading') : t('reading.toolbar.pickImage')}
+            onPress={onPickImage}
+            disabled={ocrLoading}
+          />
           <View style={{ width: 8 }} />
           <Button title={t('reading.toolbar.clear')} onPress={onClearArticle} disabled={!rawText && !fileName} />
           <View style={{ width: 8 }} />
@@ -760,6 +911,13 @@ export default function ReadingScreen() {
                   if (token.kind === 'zh') {
                     return (
                       <Text key={token.key} style={[styles.wordZh, isActive && styles.wordActive]}>
+                        {token.text}
+                      </Text>
+                    );
+                  }
+                  if (token.kind === 'number') {
+                    return (
+                      <Text key={token.key} style={[styles.word, isActive && styles.wordActive]}>
                         {token.text}
                       </Text>
                     );
