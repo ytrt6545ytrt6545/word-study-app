@@ -7,7 +7,7 @@ import { Alert, Button, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text
 import { useI18n } from '@/i18n';
 import { aiCompleteWord, AIFillResult } from '@/utils/ai';
 import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from '@/utils/articles';
-import { loadTags, loadWords, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
+import { addTag, loadTags, loadWords, normalizeTagPath, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
 
 type TokenKind = 'en' | 'zh' | 'newline' | 'other';
@@ -120,16 +120,29 @@ type LookupState = {
   error?: string;
 };
 
+const sortTagsWithReviewFirst = (tags: Iterable<string>): string[] => {
+  const list = Array.from(new Set(tags));
+  list.sort((a, b) => {
+    if (a === REVIEW_TAG) return -1;
+    if (b === REVIEW_TAG) return 1;
+    return a.localeCompare(b);
+  });
+  return list;
+};
+
 export default function ReadingScreen() {
   const { t } = useI18n();
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
+  const [customTitle, setCustomTitle] = useState<string>('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedWord, setSelectedWord] = useState<string>('');
   const [lookupState, setLookupState] = useState<LookupState | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([REVIEW_TAG]);
   const [selectedTags, setSelectedTags] = useState<string[]>([REVIEW_TAG]);
+  const [tagDraft, setTagDraft] = useState<string>('');
+  const [tagDraftError, setTagDraftError] = useState<string | null>(null);
   const [articleSaving, setArticleSaving] = useState(false);
   const [articleNotice, setArticleNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   // Reading controls
@@ -153,15 +166,26 @@ export default function ReadingScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const tags = await loadTags();
-        const unique = Array.from(new Set([...(tags || []), REVIEW_TAG]));
-        setAvailableTags(unique);
+        const [wordTags, articleTags] = await Promise.all([loadTags(), loadArticleTags()]);
+        const combined = new Set<string>([REVIEW_TAG]);
+        for (const list of [wordTags, articleTags]) {
+          if (!Array.isArray(list)) continue;
+          for (const tag of list) {
+            if (typeof tag !== 'string') continue;
+            const trimmed = tag.trim();
+            if (!trimmed) continue;
+            combined.add(trimmed);
+          }
+        }
+        setAvailableTags(sortTagsWithReviewFirst(combined));
         setSelectedTags((prev) => {
           const next = new Set(prev.length ? prev : []);
           next.add(REVIEW_TAG);
           return Array.from(next);
         });
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to load tags for reading screen', err);
+      }
     })();
   }, []);
 
@@ -265,15 +289,18 @@ export default function ReadingScreen() {
     runnerRef.current.chunks = [];
     setRawText('');
     setFileName(null);
+    setCustomTitle('');
     setSelectedKey(null);
     setSelectedWord('');
-  setLookupState(null);
-  setFeedback(null);
-  setIsReading(false);
-  setIsPaused(false);
-  setReadingIndex(0);
-  setReadingEndIndex(0);
-}, []);
+    setLookupState(null);
+    setFeedback(null);
+    setTagDraft('');
+    setTagDraftError(null);
+    setIsReading(false);
+    setIsPaused(false);
+    setReadingIndex(0);
+    setReadingEndIndex(0);
+  }, []);
 
   useEffect(() => {
     if (!articleIdParam) return;
@@ -292,8 +319,9 @@ export default function ReadingScreen() {
         onClearArticle();
         setRawText(article.rawText ?? '');
         setFileName(article.sourceRef || article.title || null);
+        setCustomTitle(article.title || '');
         const tagsForArticle = Array.from(new Set([...(article.tags ?? []), REVIEW_TAG]));
-        setAvailableTags((prev) => Array.from(new Set([...prev, ...tagsForArticle])));
+        setAvailableTags((prev) => sortTagsWithReviewFirst([...prev, ...tagsForArticle]));
         setSelectedTags(tagsForArticle);
         setArticleNotice({ kind: 'success', text: t('articles.open.success', { title: article.title }) });
       } catch (err: any) {
@@ -327,6 +355,8 @@ export default function ReadingScreen() {
       setReadingEndIndex(0);
       setRawText(textContent);
       setFileName(file.name || null);
+      const sanitized = sanitizeArticleTitle(file.name ? file.name.replace(/\.[^/.]+$/, '') : null);
+      if (sanitized) setCustomTitle(sanitized);
       setSelectedKey(null);
       setSelectedWord('');
       setLookupState(null);
@@ -429,7 +459,8 @@ export default function ReadingScreen() {
       Alert.alert(t('reading.saveArticle.empty'));
       return;
     }
-    const titleCandidate = sanitizeArticleTitle(fileName ? fileName.replace(/\.[^/.]+$/, '') : null);
+    const manualTitle = sanitizeArticleTitle(customTitle);
+    const titleCandidate = manualTitle || sanitizeArticleTitle(fileName ? fileName.replace(/\.[^/.]+$/, '') : null);
     const firstLine = sanitizeArticleTitle(
       content
         .split(/\r?\n/)
@@ -451,7 +482,8 @@ export default function ReadingScreen() {
       });
       if (tags.length > 0) {
         const existing = await loadArticleTags();
-        await saveArticleTags([...existing, ...tags]);
+        const normalized = await saveArticleTags([...existing, ...tags]);
+        setAvailableTags((prev) => Array.from(new Set([...prev, ...normalized])));
       }
       setArticleNotice({ kind: 'success', text: t('reading.saveArticle.success', { title: article.title }) });
     } catch (err: any) {
@@ -460,7 +492,41 @@ export default function ReadingScreen() {
     } finally {
       setArticleSaving(false);
     }
-  }, [fileName, rawText, selectedTags, t]);
+  }, [customTitle, fileName, rawText, selectedTags, t]);
+
+  const onAddNewTag = useCallback(async () => {
+    const raw = tagDraft.trim();
+    if (!raw) {
+      setTagDraftError(t('reading.tags.addErrorEmpty'));
+      return;
+    }
+    const normalized = normalizeTagPath(raw);
+    if (!normalized) {
+      setTagDraftError(t('reading.tags.addErrorInvalid'));
+      return;
+    }
+    const duplicate = availableTags.some((tag) => tag.toLowerCase() === normalized.toLowerCase());
+    if (duplicate) {
+      setTagDraftError(t('reading.tags.addErrorDuplicate', { tag: normalized }));
+      return;
+    }
+    try {
+      setTagDraftError(null);
+      const [wordTagList, articleTagList] = await Promise.all([addTag(normalized), loadArticleTags()]);
+      const updatedArticles = await saveArticleTags([...articleTagList, normalized]);
+      const merged = sortTagsWithReviewFirst([REVIEW_TAG, ...wordTagList, ...updatedArticles]);
+      setAvailableTags(merged);
+      setSelectedTags((prev) => {
+        const next = new Set(prev);
+        next.add(REVIEW_TAG);
+        next.add(normalized);
+        return Array.from(next);
+      });
+      setTagDraft('');
+    } catch (err: any) {
+      setTagDraftError(err?.message || t('reading.tags.addErrorGeneric'));
+    }
+  }, [availableTags, tagDraft, t]);
 
   const speak = async (text: string) => {
     const phrase = (text || '').trim();
@@ -591,6 +657,16 @@ export default function ReadingScreen() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         {!!fileName && <Text style={styles.fileName}>{t('reading.file.from', { name: fileName })}</Text>}
+        <View style={styles.metaSection}>
+          <Text style={styles.metaLabel}>{t('reading.articleTitle.label')}</Text>
+          <TextInput
+            style={styles.metaInput}
+            placeholder={t('reading.articleTitle.placeholder')}
+            value={customTitle}
+            onChangeText={setCustomTitle}
+            maxLength={120}
+          />
+        </View>
         <View style={styles.actionRow}>
           <Button title={t('reading.toolbar.pickFile')} onPress={onPickFile} />
           <View style={{ width: 8 }} />
@@ -626,6 +702,21 @@ export default function ReadingScreen() {
             <Text style={styles.tagHeaderText}>{t('reading.tags.header')}</Text>
             <Text style={styles.tagHeaderValue}>{selectedTags.length ? selectedTagsLabel : t('reading.tags.none')}</Text>
           </Pressable>
+          <View style={styles.newTagRow}>
+            <TextInput
+              style={[styles.newTagInput, tagDraftError ? styles.newTagInputError : null]}
+              placeholder={t('reading.tags.addPlaceholder')}
+              value={tagDraft}
+              onChangeText={(value) => {
+                setTagDraft(value);
+                if (tagDraftError) setTagDraftError(null);
+              }}
+              onSubmitEditing={onAddNewTag}
+              returnKeyType="done"
+            />
+            <Button title={t('reading.tags.addButton')} onPress={onAddNewTag} />
+          </View>
+          {tagDraftError ? <Text style={styles.newTagError}>{tagDraftError}</Text> : null}
           <View style={styles.tagList}>
             {availableTags.map((tag) => {
               const isSelected = selectedTags.includes(tag);
@@ -755,6 +846,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   textInput: { minHeight: 160, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, margin: 16, backgroundColor: '#fff', textAlignVertical: 'top' },
   fileName: { marginHorizontal: 16, marginTop: 12, color: '#666' },
+  metaSection: { marginHorizontal: 16, marginTop: 12, gap: 6 },
+  metaLabel: { fontSize: 14, fontWeight: '600', color: '#333' },
+  metaInput: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
   actionRow: { marginHorizontal: 16, marginTop: 12, marginBottom: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   placeholder: { marginTop: 12, color: '#888', marginHorizontal: 16 },
   articleSection: { marginTop: 20, gap: 12 },
@@ -775,6 +869,10 @@ const styles = StyleSheet.create({
   tagHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },
   tagHeaderText: { fontSize: 14, fontWeight: '600', color: '#333' },
   tagHeaderValue: { fontSize: 13, color: '#555', flexShrink: 1, textAlign: 'right', marginLeft: 8 },
+  newTagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingBottom: 10 },
+  newTagInput: { flex: 1, borderWidth: 1, borderColor: '#c5d1e5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#fff' },
+  newTagInputError: { borderColor: '#ef5350' },
+  newTagError: { color: '#c62828', fontSize: 12, paddingHorizontal: 14, paddingBottom: 6 },
   tagList: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, paddingBottom: 10 },
   tagChip: { paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#c5d1e5', borderRadius: 14, marginRight: 8, marginTop: 6, backgroundColor: '#fff' },
   tagChipSelected: { backgroundColor: '#e3f2fd', borderColor: '#64b5f6' },
