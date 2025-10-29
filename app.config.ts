@@ -82,6 +82,7 @@ const projectConfig: ExpoConfig = {
         backgroundColor: "#ffffff",
       },
     ],
+    "expo-image-picker",
     "react-native-edge-to-edge",
   ],
   experiments: {

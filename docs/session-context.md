@@ -128,7 +128,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
   - 建立 C:\temp，並在 android/gradle.properties 的 org.gradle.jvmargs 追加 `-Djava.io.tmpdir=C:\temp`，確保 prefab 暫存路徑合法。
 - 建置步驟：
   1. 在專案根目錄執行 `npx expo prebuild --platform android`（首次執行即可，已產出 `android/` 目錄）。
-  2. 進入 `android/` 後執行 `./gradlew.bat assembleRelease`；在同一 shell 中預先設定上述環境變數。
+  2. 建置前先刪除 `android/app/build/outputs/apk/release` 目錄（例如 `Remove-Item -Recurse -Force android/app/build/outputs/apk/release`），確保不會沿用舊 APK。
+  3. 進入 `android/` 後執行 `./gradlew.bat assembleRelease`；在同一 shell 中預先設定上述環境變數。
 - 產物位置：`android/app/build/outputs/apk/release/app-release.apk`。
 - 故障排查：若日後又出現 prefab 錯誤，優先檢查環境變數是否仍指向 ASCII 路徑並確認 C:\temp 存在，必要時清除 `.gradle-cache` 後重新建置。
 - 若遇到 `Execution failed for task ':react-native-reanimated:configureCMakeRelWithDebInfo[arm64-v8a]'` 且 Prefab CLI 輸出亂碼（例如 `???O????`）或反覆出現 `-class-path` 錯誤，代表建置流程又回到含非 ASCII 的使用者目錄（例如 `C:\Users\µøÅ¥\...`）。請確認 `GRADLE_USER_HOME`、`ANDROID_PREFAB_HOME`、`java.io.tmpdir` 都指向 ASCII 路徑（建議 `C:\word-study-app\.gradle-cache` 與 `C:\temp`），必要時重跑 `scripts/setup-android-build-env.ps1 -Persist`。
