@@ -114,9 +114,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 5. 重新整理頁面或重啟 App，確認資料更新；必要時再執行「匯出到裝置」檢查檔案內容。
 
 ## 交接紀錄（2025-10-27）
-- 已完成：閱讀頁新增「從圖片匯入」功能，使用 `expo-image-picker@15.0.7` 擷取圖片並呼叫 OpenAI Vision 將辨識結果貼入輸入框，搭配載入狀態與錯誤提示。
+- 已完成：閱讀頁新增「從圖片匯入」功能，現改用 DocumentPicker 搭配 FileSystem 讀取圖檔後呼叫 OpenAI Vision 將辨識結果貼入輸入框，保留載入狀態與錯誤提示（原流程使用 `expo-image-picker@15.0.7`）。
 - `utils/ai.ts` 擴充圖片 OCR helper、繁體中文強制轉換（使用 `chinese-conv`）與錯誤訊息格式化（429 限速顯示中文資訊）。
-- 新增依賴：`expo-image-picker`、`chinese-conv`，並建立 `types/chinese-conv.d.ts`。
+- 新增依賴：`chinese-conv`，並建立 `types/chinese-conv.d.ts`；原先新增的 `expo-image-picker` 已不再使用，若後續確認不再回退即可從 `package.json` 移除。
 - 待確認：在 Web 與真機環境檢查圖片權限流程與繁體轉換後的朗讀效果，必要時加入 OCR 重試與備援方案。
 - 風險：OpenAI API 目前仍可能觸發 TPM 限制，若持續出現 429 需評估升級帳號或改用替代金鑰。
 
@@ -142,3 +142,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - 排查 release APK 閱讀分頁白屏，透過 `adb logcat` 確認缺少 `ExponentImagePicker` 原生模組，已重新 `expo prebuild --clean` 並以 `GRADLE_USER_HOME=C:\temp\gradle-cache-20251028`、`-Djava.io.tmpdir=C:\temp` 重新建置，APK 內含 `expo-image-picker` 並可後續驗證。
 - Prefab CLI 曾再次落到含非 ASCII 的使用者目錄導致 `prefab_command` 找不到 `-class-path`；重跑 `scripts/setup-android-build-env.ps1` 並設定 `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:\temp` 後，`./gradlew.bat assembleRelease` 改用 `C:\temp\agp-prefab-*` 暫存路徑即能順利完成。
 - 2025-10-28 再次執行環境預防措施：建立 `C:\temp\android-prefab`、以 `setx` 固定 `ANDROID_PREFAB_HOME=C:\temp\android-prefab`，並跑 `scripts/setup-android-build-env.ps1 -Persist` 確保 `GRADLE_USER_HOME`、`TEMP/TMP`、Android SDK 路徑皆落在 ASCII 目錄，建置前如在新 shell 請重新套用設定。
+
+## 本次會話紀錄（2025-10-29）
+- 重新以 `expo prebuild --platform android` 搭配刪除 `android/app/build/outputs/apk/release` 重建 release APK，最新產物為 `android/app/build/outputs/apk/release/app-release.apk`（2025/10/29 11:45，約 83.7 MB）。
+- `app/(tabs)/reading.tsx` 加入暫時的 `console.log`（DocumentPicker 回傳資產後會印出 uri / fileCopyUri / mimeType / size），方便確認是否拿到圖檔；後續排查完成請移除。
+- 排查重點：在手機重新安裝 APK 後於閱讀頁按「從圖片匯入」，搭配 `adb logcat | Select-String "reading :: onPickImage"` 觀察資產資訊與錯誤堆疊。
+- 若仍在畫面看到「辨識失敗」訊息，請確認 DocumentPicker 是否回傳資產（log 中不為 `null`）、`fileCopyUri` 是否存在，以及 `FileSystem.readAsStringAsync` 是否成功；如整段 log 未出現，請先確認 App 版本與權限設定。
+
+## 本次會話紀錄（2025-10-30）
+- 「從圖片匯入」改以 DocumentPicker + FileSystem 讀取圖檔後送至 OpenAI Vision，移除對 `expo-image-picker` 原生模組的依賴，避免 APK 遺漏模組時出現 `Image picker not available`。
+- `onPickImage` 在取得資產與轉成 Base64 失敗時會顯示通用錯誤訊息，並保留成功/失敗提示；若需追蹤流程，可透過 `adb logcat | Select-String "reading :: onPickImage"` 檢視 asset 資訊。
+- 若確實需要回退至 `expo-image-picker`，只要恢復舊版 `onPickImage` 並重新 prebuild/assemble 即可；目前 `expo-image-picker` 仍暫留於 `package.json`，待確認無回退需求後可移除。
+- `npx tsc --noEmit` 仍會因既有的 `types/chinese-conv.d.ts` 編碼問題報錯（Invalid character）；和本次調整無關，待後續整理該型別檔再解決。
+- 持續遵循建置前清理 release 目錄與執行 `scripts/setup-android-build-env.ps1` 的流程，避免沿用舊輸出或環境變數記錯。
+

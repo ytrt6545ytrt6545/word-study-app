@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -9,22 +10,6 @@ import { aiCompleteWord, AIFillResult, recognizeImageText } from '@/utils/ai';
 import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from '@/utils/articles';
 import { addTag, loadTags, loadWords, normalizeTagPath, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
-import type { ImagePickerAsset } from 'expo-image-picker';
-
-type ImagePickerModule = typeof import('expo-image-picker');
-
-let ImagePicker: ImagePickerModule | null = null;
-try {
-  // Dynamically載入，若原生模組缺失可避免整個應用程式崩潰
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  ImagePicker = require('expo-image-picker') as ImagePickerModule;
-} catch (err) {
-  if (__DEV__) {
-    console.warn('expo-image-picker unavailable, OCR feature disabled.', err);
-  }
-  ImagePicker = null;
-}
-
 type TokenKind = 'en' | 'zh' | 'number' | 'newline' | 'other';
 type Token = { key: string; text: string; kind: TokenKind };
 type ReadingChunk = {
@@ -464,37 +449,13 @@ export default function ReadingScreen() {
   }, [t]);
 
   const onPickImage = useCallback(async () => {
-    const picker = ImagePicker;
-    if (!picker) {
-      setArticleNotice({
-        kind: 'error',
-        text: t('reading.ocr.error.generic', { message: 'Image picker not available. Please update the app.' }),
-      });
-      return;
-    }
+    let pickResult: DocumentPicker.DocumentPickerResult | undefined;
     try {
-      if (picker.requestMediaLibraryPermissionsAsync) {
-        const permission = await picker.requestMediaLibraryPermissionsAsync();
-        if (permission && permission.granted === false && permission.status !== 'granted') {
-          setArticleNotice({ kind: 'error', text: t('reading.ocr.error.permission') });
-          return;
-        }
-      }
-    } catch {
-      // Web 平台可能不需要權限，忽略錯誤
-    }
-
-    let asset: ImagePickerAsset | undefined;
-    try {
-      const result = await picker.launchImageLibraryAsync({
-        mediaTypes: picker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        allowsMultipleSelection: false,
-        base64: true,
-        quality: 0.85,
+      pickResult = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        multiple: false,
+        copyToCacheDirectory: true,
       });
-      if (result.canceled) return;
-      asset = result.assets?.[0];
     } catch (err: any) {
       setArticleNotice({
         kind: 'error',
@@ -503,7 +464,48 @@ export default function ReadingScreen() {
       return;
     }
 
-    if (!asset || !asset.base64) {
+    if (!pickResult || (pickResult as any).canceled) return;
+
+    const asset = (pickResult as any).assets?.[0] as {
+      uri?: string;
+      fileCopyUri?: string | null;
+      mimeType?: string | null;
+      name?: string | null;
+      size?: number | null;
+    } | undefined;
+
+    if (!asset) {
+      setArticleNotice({ kind: 'error', text: t('reading.ocr.error.noData') });
+      return;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log('reading :: onPickImage asset =', {
+      uri: asset?.uri,
+      fileCopyUri: asset?.fileCopyUri,
+      mimeType: asset?.mimeType,
+      size: asset?.size,
+      name: asset?.name,
+    });
+
+    const assetUri = asset?.fileCopyUri ?? asset?.uri;
+    if (!assetUri) {
+      setArticleNotice({ kind: 'error', text: t('reading.ocr.error.noData') });
+      return;
+    }
+
+    let base64: string | null = null;
+    try {
+      base64 = await FileSystem.readAsStringAsync(assetUri, { encoding: FileSystem.EncodingType.Base64 });
+    } catch (err: any) {
+      setArticleNotice({
+        kind: 'error',
+        text: t('reading.ocr.error.generic', { message: err?.message || t('common.tryLater') }),
+      });
+      return;
+    }
+
+    if (!base64) {
       setArticleNotice({ kind: 'error', text: t('reading.ocr.error.noData') });
       return;
     }
@@ -512,11 +514,24 @@ export default function ReadingScreen() {
     try {
       setOcrLoading(true);
       started = true;
+      const extension = asset?.name?.split('.').pop()?.toLowerCase();
       const mimeType =
-        asset.mimeType ||
-        (asset.type && asset.type.startsWith('image/') ? asset.type : undefined) ||
+        asset?.mimeType ||
+        (extension === 'png'
+          ? 'image/png'
+          : extension === 'webp'
+          ? 'image/webp'
+          : extension === 'gif'
+          ? 'image/gif'
+          : extension === 'bmp'
+          ? 'image/bmp'
+          : extension === 'heic' || extension === 'heif'
+          ? 'image/heic'
+          : extension === 'avif'
+          ? 'image/avif'
+          : undefined) ||
         'image/jpeg';
-      const { text } = await recognizeImageText({ base64: asset.base64, mimeType, locale });
+      const { text } = await recognizeImageText({ base64, mimeType, locale });
       const normalized = (text || '').trim();
       if (!normalized) {
         setArticleNotice({ kind: 'error', text: t('reading.ocr.error.noText') });
@@ -527,9 +542,8 @@ export default function ReadingScreen() {
         return base ? `${base}\n\n${normalized}` : normalized;
       });
       const derivedName =
-        asset.fileName ||
-        (asset.uri ? asset.uri.split(/[\\/]/).pop() : undefined) ||
-        asset.assetId ||
+        asset?.name ||
+        (asset?.uri ? asset.uri.split(/[\\/]/).pop() ?? undefined : undefined) ||
         'image';
       setFileName(derivedName);
       setArticleNotice({ kind: 'success', text: t('reading.ocr.success') });
