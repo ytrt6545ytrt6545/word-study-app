@@ -2,6 +2,22 @@
 當我說起動WEB時請透過 Start-Process 在背景啟動(不要刪這條)
 當我說結束工作時請把這次對話視窗所執行的工作成果及需要交接的資訊更新交接的檔案，讓下次開新視窗時，新的AI能快速了解情況。(不要刪這條)
 閱讀 README.md 了解程式(不要刪這條)
+# 本機建立APK特別說明
+環境變數固定在 ASCII 路徑：在建置前先確認 GRADLE_USER_HOME、ANDROID_PREFAB_HOME、ANDROID_HOME、ANDROID_SDK_ROOT、TMP/TEMP、JAVA_TOOL_OPTIONS（若有覆寫 tmpdir）都指向沒有非 ASCII 字元的目錄，建議沿用 C:\word-study-app\.gradle-cache 與 C:\temp。可在 PowerShell 內跑 gci env:GRADLE_USER_HOME,ANDROID_PREFAB_HOME,TMP,TEMP 確認。
+
+開工就執行環境初始化腳本：每次打開新 shell 先跑
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
+若需要長期套用就加 -Persist。腳本會建立/更新符號連結並設定上述環境變數，避免忘記。
+
+建置前快速自檢與清理：
+
+執行 Get-ChildItem Env: | Select Name,Value | Select-String 'GRADLE|ANDROID|TMP' 確保值正確。
+檢查 C:\temp、.gradle-cache 是否存在且有寫入權限。
+若 Prefab 仍抓到錯誤路徑，可刪除 %LOCALAPPDATA%\Temp\agp-prefab-* 或整個 .gradle-cache 後重跑初始化腳本再建置。
+照這三步走，就能避免 Prefab 再回到原本含特殊字元的使用者目錄，自然不會再出現 configureCMakeRelWithDebInfo 亂碼錯誤。
+
+先前確實卡在 Prefab CLI，又把暫存路徑指到含非 ASCII 的使用者目錄，導致 prefab_command 找不到 -class-path。我先照指示跑 scripts/setup-android-build-env.ps1，再加上 JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:\temp 重新執行 ./gradlew.bat assembleRelease，Prefab 改用 C:\temp\agp-prefab-… 後就順利跑完。
+
 # Session Context
 
 ## 專案概況
@@ -16,6 +32,7 @@
 - 新增備份流程測試（`tests/backup.spec.ts`），涵蓋文章匯入匯出的正常路徑與 fallback 行為。
 - 收藏庫頁面（`app/(tabs)/articles.tsx`）調整 Web 平台刪除流程並新增卡片點擊導向閱讀頁。
 - 閱讀頁（`app/(tabs)/reading.tsx`）支援以 `articleId` 參數載入收藏，會自動帶入文章內容與標籤。
+- 針對 release APK 閱讀分頁白屏問題，重新執行 `npx expo prebuild --platform android --clean` 同步 `expo-image-picker` 原生模組，並以新的 Gradle 快取路徑 `C:\temp\gradle-cache-20251028` 成功 `./gradlew.bat assembleRelease` 產出 APK。
 
 ## 操作指示
 - 需要啟動 Web 時，參考「匯出／匯入 Runbook（Web）」步驟 1。
@@ -114,9 +131,13 @@
   2. 進入 `android/` 後執行 `./gradlew.bat assembleRelease`；在同一 shell 中預先設定上述環境變數。
 - 產物位置：`android/app/build/outputs/apk/release/app-release.apk`。
 - 故障排查：若日後又出現 prefab 錯誤，優先檢查環境變數是否仍指向 ASCII 路徑並確認 C:\temp 存在，必要時清除 `.gradle-cache` 後重新建置。
+- 若遇到 `Execution failed for task ':react-native-reanimated:configureCMakeRelWithDebInfo[arm64-v8a]'` 且 Prefab CLI 輸出亂碼（例如 `???O????`）或反覆出現 `-class-path` 錯誤，代表建置流程又回到含非 ASCII 的使用者目錄（例如 `C:\Users\µøÅ¥\...`）。請確認 `GRADLE_USER_HOME`、`ANDROID_PREFAB_HOME`、`java.io.tmpdir` 都指向 ASCII 路徑（建議 `C:\word-study-app\.gradle-cache` 與 `C:\temp`），必要時重跑 `scripts/setup-android-build-env.ps1 -Persist`。
 - 長期設定：新增 `scripts/setup-android-build-env.ps1`，於 PowerShell 執行 `powershell -ExecutionPolicy Bypass -File ./scripts/setup-android-build-env.ps1 -Persist` 可一鍵建立連結、建立目錄並寫入使用者層級環境變數；若只需當前 shell，省略 `-Persist` 即可。
 
 ## 本次會話紀錄（2025-10-28）
 - 已成功在 Windows 本機透過 prebuild + Gradle 建出 release APK（路徑：`android/app/build/outputs/apk/release/app-release.apk`）。
 - 調整 `android/gradle.properties` 加入 `-Djava.io.tmpdir=C:\temp`，修復 prefab 路徑編碼問題。
 - 新增 `scripts/setup-android-build-env.ps1`，可一鍵建立 ASCII SDK 連結並設定環境變數（支援 `-Persist` 寫入使用者層級設定）。
+- 排查 release APK 閱讀分頁白屏，透過 `adb logcat` 確認缺少 `ExponentImagePicker` 原生模組，已重新 `expo prebuild --clean` 並以 `GRADLE_USER_HOME=C:\temp\gradle-cache-20251028`、`-Djava.io.tmpdir=C:\temp` 重新建置，APK 內含 `expo-image-picker` 並可後續驗證。
+- Prefab CLI 曾再次落到含非 ASCII 的使用者目錄導致 `prefab_command` 找不到 `-class-path`；重跑 `scripts/setup-android-build-env.ps1` 並設定 `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:\temp` 後，`./gradlew.bat assembleRelease` 改用 `C:\temp\agp-prefab-*` 暫存路徑即能順利完成。
+- 2025-10-28 再次執行環境預防措施：建立 `C:\temp\android-prefab`、以 `setx` 固定 `ANDROID_PREFAB_HOME=C:\temp\android-prefab`，並跑 `scripts/setup-android-build-env.ps1 -Persist` 確保 `GRADLE_USER_HOME`、`TEMP/TMP`、Android SDK 路徑皆落在 ASCII 目錄，建置前如在新 shell 請重新套用設定。

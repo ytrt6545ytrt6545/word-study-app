@@ -17,10 +17,10 @@ function New-JunctionIfMissing {
     }
 
     if (-not (Test-Path $TargetPath)) {
-        throw "指定的 SDK 來源路徑不存在：$TargetPath"
+        throw "Android SDK source path not found: $TargetPath"
     }
 
-    Write-Host "建立連結 $LinkPath -> $TargetPath"
+    Write-Host "Creating junction $LinkPath -> $TargetPath"
     New-Item -ItemType Junction -Path $LinkPath -Target $TargetPath | Out-Null
 }
 
@@ -28,7 +28,7 @@ function Ensure-Directory {
     param([string]$Path)
 
     if (-not (Test-Path $Path)) {
-        Write-Host "建立資料夾：$Path"
+        Write-Host "Creating directory $Path"
         New-Item -ItemType Directory -Path $Path | Out-Null
     }
 }
@@ -47,20 +47,29 @@ $env:GRADLE_USER_HOME = $gradleCache
 $env:TEMP = $tempPath
 $env:TMP = $tempPath
 
-Write-Host "已設定目前工作階段環境變數："
+$tmpOption = "-Djava.io.tmpdir=$tempPath"
+if ([string]::IsNullOrWhiteSpace($env:JAVA_TOOL_OPTIONS)) {
+    $env:JAVA_TOOL_OPTIONS = $tmpOption
+} elseif ($env:JAVA_TOOL_OPTIONS -notmatch '(^|\s)-Djava\.io\.tmpdir=') {
+    $env:JAVA_TOOL_OPTIONS = "$($env:JAVA_TOOL_OPTIONS) $tmpOption".Trim()
+}
+
+Write-Host "Session environment variables set:"
 Write-Host "  ANDROID_SDK_ROOT=$env:ANDROID_SDK_ROOT"
 Write-Host "  ANDROID_HOME=$env:ANDROID_HOME"
 Write-Host "  GRADLE_USER_HOME=$env:GRADLE_USER_HOME"
 Write-Host "  TEMP/TMP=$env:TEMP"
+Write-Host "  JAVA_TOOL_OPTIONS=$env:JAVA_TOOL_OPTIONS"
 
 if ($Persist) {
-    Write-Host "寫入使用者層級環境變數 (setx)..."
+    Write-Host "Persisting values with setx..."
     setx ANDROID_SDK_ROOT $env:ANDROID_SDK_ROOT | Out-Null
     setx ANDROID_HOME $env:ANDROID_HOME | Out-Null
     setx GRADLE_USER_HOME $env:GRADLE_USER_HOME | Out-Null
     setx TEMP $env:TEMP | Out-Null
     setx TMP $env:TMP | Out-Null
-    Write-Host "完成。請重新開啟終端機讓變更生效。"
+    setx JAVA_TOOL_OPTIONS $env:JAVA_TOOL_OPTIONS | Out-Null
+    Write-Host "Done. Open a new terminal to pick up the persisted values."
 } else {
-    Write-Host "若需寫入使用者層級環境變數可加上 -Persist 參數。"
+    Write-Host "Persist flag not provided; values applied only to the current session."
 }

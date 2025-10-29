@@ -1,5 +1,4 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,6 +9,21 @@ import { aiCompleteWord, AIFillResult, recognizeImageText } from '@/utils/ai';
 import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from '@/utils/articles';
 import { addTag, loadTags, loadWords, normalizeTagPath, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
+import type { ImagePickerAsset } from 'expo-image-picker';
+
+type ImagePickerModule = typeof import('expo-image-picker');
+
+let ImagePicker: ImagePickerModule | null = null;
+try {
+  // Dynamically載入，若原生模組缺失可避免整個應用程式崩潰
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  ImagePicker = require('expo-image-picker') as ImagePickerModule;
+} catch (err) {
+  if (__DEV__) {
+    console.warn('expo-image-picker unavailable, OCR feature disabled.', err);
+  }
+  ImagePicker = null;
+}
 
 type TokenKind = 'en' | 'zh' | 'number' | 'newline' | 'other';
 type Token = { key: string; text: string; kind: TokenKind };
@@ -165,8 +179,21 @@ type LookupState = {
   error?: string;
 };
 
-const sortTagsWithReviewFirst = (tags: Iterable<string>): string[] => {
-  const list = Array.from(new Set(tags));
+const dedupeTags = (tags: Iterable<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  for (const raw of tags) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    list.push(trimmed);
+  }
+  return list;
+};
+
+const sortTagsWithReviewFirst = (tags: Iterable<string | null | undefined>): string[] => {
+  const list = dedupeTags(tags);
   list.sort((a, b) => {
     if (a === REVIEW_TAG) return -1;
     if (b === REVIEW_TAG) return 1;
@@ -227,7 +254,7 @@ export default function ReadingScreen() {
         setSelectedTags((prev) => {
           const next = new Set(prev.length ? prev : []);
           next.add(REVIEW_TAG);
-          return Array.from(next);
+          return dedupeTags(next);
         });
       } catch (err) {
         console.warn('Failed to load tags for reading screen', err);
@@ -390,7 +417,7 @@ export default function ReadingScreen() {
         setRawText(article.rawText ?? '');
         setFileName(article.sourceRef || article.title || null);
         setCustomTitle(article.title || '');
-        const tagsForArticle = Array.from(new Set([...(article.tags ?? []), REVIEW_TAG]));
+        const tagsForArticle = dedupeTags([...(article.tags ?? []), REVIEW_TAG]);
         setAvailableTags((prev) => sortTagsWithReviewFirst([...prev, ...tagsForArticle]));
         setSelectedTags(tagsForArticle);
         setArticleNotice({ kind: 'success', text: t('articles.open.success', { title: article.title }) });
@@ -437,9 +464,17 @@ export default function ReadingScreen() {
   }, [t]);
 
   const onPickImage = useCallback(async () => {
+    const picker = ImagePicker;
+    if (!picker) {
+      setArticleNotice({
+        kind: 'error',
+        text: t('reading.ocr.error.generic', { message: 'Image picker not available. Please update the app.' }),
+      });
+      return;
+    }
     try {
-      if (ImagePicker.requestMediaLibraryPermissionsAsync) {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (picker.requestMediaLibraryPermissionsAsync) {
+        const permission = await picker.requestMediaLibraryPermissionsAsync();
         if (permission && permission.granted === false && permission.status !== 'granted') {
           setArticleNotice({ kind: 'error', text: t('reading.ocr.error.permission') });
           return;
@@ -449,10 +484,10 @@ export default function ReadingScreen() {
       // Web 平台可能不需要權限，忽略錯誤
     }
 
-    let asset: ImagePicker.ImagePickerAsset | undefined;
+    let asset: ImagePickerAsset | undefined;
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const result = await picker.launchImageLibraryAsync({
+        mediaTypes: picker.MediaTypeOptions.Images,
         allowsEditing: false,
         allowsMultipleSelection: false,
         base64: true,
@@ -571,7 +606,8 @@ export default function ReadingScreen() {
     const translation = (lookupState?.ai?.zh || '').trim();
     const exampleEn = lookupState?.ai?.exampleEn || '';
     const exampleZh = lookupState?.ai?.exampleZh || '';
-    const tagSet = new Set(incomingTags);
+    const sanitizedTags = dedupeTags(incomingTags);
+    const tagSet = new Set(sanitizedTags);
     tagSet.add(REVIEW_TAG);
     const tags = Array.from(tagSet);
     const nowIso = new Date().toISOString();
@@ -610,7 +646,7 @@ export default function ReadingScreen() {
         .find((line) => line.length > 0) || ''
     );
     const title = titleCandidate || firstLine || t('reading.saveArticle.defaultTitle');
-    const tags = selectedTags.filter((tag) => !!tag);
+    const tags = dedupeTags(selectedTags);
 
     setArticleSaving(true);
     try {
@@ -662,7 +698,7 @@ export default function ReadingScreen() {
         const next = new Set(prev);
         next.add(REVIEW_TAG);
         next.add(normalized);
-        return Array.from(next);
+        return dedupeTags(next);
       });
       setTagDraft('');
     } catch (err: any) {
