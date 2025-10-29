@@ -24,7 +24,7 @@ function New-JunctionIfMissing {
     New-Item -ItemType Junction -Path $LinkPath -Target $TargetPath | Out-Null
 }
 
-function Ensure-Directory {
+function New-DirectoryIfMissing {
     param([string]$Path)
 
     if (-not (Test-Path $Path)) {
@@ -38,8 +38,8 @@ $gradleCache = 'C:\word-study-app\.gradle-cache'
 $tempPath = 'C:\temp'
 
 New-JunctionIfMissing -LinkPath $asciiSdkPath -TargetPath $SdkSource
-Ensure-Directory -Path $gradleCache
-Ensure-Directory -Path $tempPath
+New-DirectoryIfMissing -Path $gradleCache
+New-DirectoryIfMissing -Path $tempPath
 
 $env:ANDROID_SDK_ROOT = $asciiSdkPath
 $env:ANDROID_HOME = $asciiSdkPath
