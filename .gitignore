@@ -12,6 +12,7 @@ expo-env.d.ts
 # Native
 .kotlin/
 .gradle-cache/
+.gradle-cache2/
 *.orig.*
 *.jks
 *.p8
@@ -41,6 +42,8 @@ yarn-error.*
 app-example
 
 android/
+
+*.log
 
 
 *.apk
