@@ -2,7 +2,11 @@ import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { tify } from "chinese-conv";
 
-// Centralized helpers for resolving OpenAI keys, handling fallbacks, and making API calls.
+// AI 工具模組：統一管理 OpenAI 金鑰、錯誤處理、文字補全與圖片 OCR 的呼叫。
+// 透過集中化的入口，可避免畫面層重複撰寫 fetch 邏輯與錯誤訊息轉換。
+// 特色：
+// - 自動處理測試環境（__DEV__）下的 fallback，確保沒有金鑰時也能回傳範例資料。
+// - 針對瀏覽器環境的限制提供明確錯誤訊息，方便使用者改用原生 App。
 
 export type AIResponse = { text: string };
 
@@ -157,6 +161,8 @@ export type AIFillResult = {
 
 export type OCRResult = { text: string };
 
+// 根據使用者輸入的英文或中文欄位，向 OpenAI 取得完整的詞彙資訊。
+// 回傳結構會包含英文、中文翻譯、例句與 KK 音標，供探索頁或閱讀頁補齊字卡內容。
 export async function aiCompleteWord(input: { en?: string; zh?: string }): Promise<AIFillResult> {
   const key = resolveOpenAIKey();
   const en = (input.en || "").trim();
@@ -275,6 +281,8 @@ const ensureTraditional = (value?: string | null) => {
 
 const estimateBase64Bytes = (base64: string): number => Math.floor((base64.length * 3) / 4);
 
+// 將 base64 圖片送到 OpenAI Vision，並回傳純文字 OCR 結果。
+// 會先檢查檔案大小與金鑰是否齊全，並針對瀏覽器/行動裝置分別回傳在地化錯誤訊息。
 export async function recognizeImageText(input: {
   base64: string;
   mimeType?: string;

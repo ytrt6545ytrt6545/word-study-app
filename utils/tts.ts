@@ -4,6 +4,8 @@ import * as Speech from "expo-speech";
 export type VoiceGender = "male" | "female";
 export type TtsVoice = { identifier: string; name?: string; language?: string; quality?: number | string };
 
+// 語音相關設定皆以固定鍵值儲存在 AsyncStorage，方便備份模組一次帶走或恢復。
+// 這些鍵值用來映射 AsyncStorage 內的語音偏好設定，統一管理便於備份或重置。
 const KEY_RATE_PERCENT = "@tts_rate_percent"; // 0-100 slider for EN
 const KEY_GENDER = "@tts_gender";
 const KEY_PITCH_PERCENT = "@tts_pitch_percent"; // 0-100 for pitch (left=male, right=female)
@@ -12,6 +14,9 @@ const KEY_VOICE_ZH = "@tts_voice_zh";
 const KEY_RATE_ZH = "@tts_rate_zh"; // zh rate multiplier (1.0 = normal)
 const KEY_PAUSE_COMMA_MS = "@tts_pause_comma_ms"; // reading pause at comma
 const KEY_PAUSE_SENT_MS = "@tts_pause_sentence_ms"; // reading pause at sentence end
+
+// 基礎語速與聲線讀寫：載入/儲存使用者偏好供設定頁與朗讀功能共用。
+// 調整流程建議：設定頁更新 → 呼叫對應 save 函式 → 朗讀端透過 getSpeechOptions 取得最新參數。
 
 export async function loadSpeechSettings(): Promise<{ ratePercent: number; gender: VoiceGender }> {
   const [percentRaw, genderRaw] = await Promise.all([
@@ -112,6 +117,7 @@ export async function saveZhRate(multiplier: number): Promise<number> {
   return m;
 }
 
+// 介面層與朗讀流程呼叫此函式取得最終語音參數，會根據語系選擇不同語者與語速設定。
 export async function getSpeechOptions(language?: string): Promise<{ language?: string; rate: number; pitch: number; voice?: string }> {
   const { ratePercent } = await loadSpeechSettings();
   const { voiceEn, voiceZh } = await loadVoiceSelection();
@@ -125,6 +131,7 @@ export async function getSpeechOptions(language?: string): Promise<{ language?: 
 }
 
 // Reading pauses (web/reading screen)
+// 閱讀頁的朗讀功能會根據這些停頓參數調整逗號與句點的停留時間。
 export async function loadPauseConfig(): Promise<{ commaMs: number; sentenceMs: number }> {
   try {
     const [cRaw, sRaw] = await Promise.all([
@@ -143,6 +150,7 @@ export async function loadPauseConfig(): Promise<{ commaMs: number; sentenceMs: 
   }
 }
 
+// 寫入停頓設定時會自動做範圍檢查（逗號 80-200ms、句尾 150-400ms），避免異常值導致朗讀體驗失衡。
 export async function savePauseConfig(cfg: Partial<{ commaMs: number; sentenceMs: number }>): Promise<{ commaMs: number; sentenceMs: number }> {
   const cur = await loadPauseConfig();
   let comma = Math.max(80, Math.min(200, Math.round(Number(cfg.commaMs ?? cur.commaMs))));

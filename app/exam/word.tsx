@@ -7,12 +7,17 @@ import { getSpeechOptions } from '@/utils/tts';
 import { useRouter } from 'expo-router';
 import { useI18n } from '@/i18n';
 
+// 單字測驗頁：以 EXAM 標籤篩選測驗清單，提供朗讀、輸入檢查與加入複習標籤的操作流程。
+// 資料來源來自 `loadWords`，答題後可透過 `toggleWordTag` 調整複習標籤，並讓設定頁顯示的每日限制發揮作用。
+
 function shuffle<T>(arr: T[]): T[] {
   return arr.map((v) => [Math.random(), v] as const).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 }
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// 畫面維護題庫順序、計算答題回饋與導向下一題，並處理鍵盤/朗讀的互動細節。
+// 透過 `order` 陣列控制題目隨機順序，並在每題結束後調整狀態以便再次朗讀或切換題目。
 export default function WordExam() {
   const router = useRouter();
   const { t } = useI18n();

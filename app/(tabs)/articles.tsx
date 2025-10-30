@@ -22,8 +22,13 @@ import {
   loadArticles,
 } from '@/utils/articles';
 
+// 收藏庫頁面：讀取 AsyncStorage 中的文章列表，提供標籤篩選、閱讀跳轉與刪除操作。
+// 資料來源來自 `utils/articles`，每次返回此頁時會透過 `useFocusEffect` 重新載入，確保閱讀頁的修改能即時同步。
+
 type Banner = { kind: 'success' | 'error'; text: string };
 
+// 主要畫面負責：載入文章、依標籤過濾、顯示摘要片段並支援刪除提醒。
+// 刪除成功後會更新 local state 並透過 banner 告知使用者，錯誤則以多語系訊息顯示。
 export default function ArticleLibraryScreen() {
   const { t } = useI18n();
   const router = useRouter();

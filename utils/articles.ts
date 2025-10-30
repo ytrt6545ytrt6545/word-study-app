@@ -2,6 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { joinTagPath, normalizeTagPath, parseTagPath } from "./storage";
 
+// 文章資料模組：統一管理收藏文章、標籤與重點標記的讀寫與資料清洗邏輯。
+// 主要責任：
+// - 提供 CRUD API 讓閱讀頁與收藏庫操作文章資料。
+// - 確保匯入備份或外部來源時，欄位皆符合 `Article` 型別與時間戳格式。
+// - 維護標籤層級（含自訂排序）及 highlights 內容，避免 AsyncStorage 內出現不合法資料。
+
 const ARTICLES_KEY = "@halo_articles";
 const ARTICLE_TAGS_KEY = "@halo_article_tags";
 const ARTICLE_TAG_ORDER_KEY = "@halo_article_tag_order";
@@ -173,6 +179,11 @@ function ensureArticleTags(input: unknown): string[] {
   return Array.from(map.values());
 }
 
+// 將外部輸入的文章資料補齊預設值並矯正欄位格式，確保儲存在本地端的資料一致。
+// 此函式會：
+// - 修正時間戳（createdAt/updatedAt）為 ISO 字串。
+// - 過濾空白標題、來源資訊與 highlight 無效欄位。
+// - 針對 highlights/ tags 做去重與排序，以避免前端顯示例外狀況。
 function normalizeArticle(raw: any): Article {
   const now = nowIso();
   const createdAt = toIsoOrFallback(raw?.createdAt, now);
@@ -201,6 +212,7 @@ async function writeArticles(list: Article[]): Promise<void> {
   await AsyncStorage.setItem(ARTICLES_KEY, JSON.stringify(list));
 }
 
+// 從 AsyncStorage 讀取整份文章清單，並逐筆正規化回程式可用的型別。
 export async function loadArticles(): Promise<Article[]> {
   const raw = await AsyncStorage.getItem(ARTICLES_KEY);
   if (!raw) return [];
@@ -223,6 +235,8 @@ export async function saveArticles(list: Article[]): Promise<void> {
   await writeArticles(normalized);
 }
 
+// 建立新文章時會套用預設欄位、生成 ID 與時間戳後再寫入本地存放。
+// 透過 normalizeArticle 確保每個欄位（含 highlights）皆符合前端預期結構。
 export async function createArticle(draft: ArticleDraft): Promise<Article> {
   const now = nowIso();
   const base: Article = normalizeArticle({
@@ -238,6 +252,8 @@ export async function createArticle(draft: ArticleDraft): Promise<Article> {
   return base;
 }
 
+// 更新既有文章，僅接受補丁欄位並保留原始建立時間。
+// mutateArticle 會先載入最新清單，再以 normalizeArticle 防止 partial patch 產生非法資料。
 export async function updateArticle(id: string, patch: ArticlePatch): Promise<Article | null> {
   const existing = await loadArticles();
   const idx = existing.findIndex((item) => item.id === id);
@@ -258,6 +274,7 @@ export async function updateArticle(id: string, patch: ArticlePatch): Promise<Ar
   return nextArticle;
 }
 
+// 刪除文章會直接重寫整份清單，成功時回傳 true 以便 UI 更新。
 export async function deleteArticle(id: string): Promise<boolean> {
   const existing = await loadArticles();
   const next = existing.filter((item) => item.id !== id);
@@ -271,6 +288,7 @@ export async function getArticleById(id: string): Promise<Article | null> {
   return list.find((item) => item.id === id) ?? null;
 }
 
+// 取得文章標籤並過濾空值、重複項，確保介面不會顯示髒資料。
 export async function loadArticleTags(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(ARTICLE_TAGS_KEY);
   if (!raw) return [];

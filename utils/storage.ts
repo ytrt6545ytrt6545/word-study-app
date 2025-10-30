@@ -1,8 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { defaultSrs, SrsState, updateSrs } from "./srs";
 
-// 儲存層核心模組：負責標籤階層、SRS 計算、每日限制與偏好設定等資料操作，
-// 所有頁面都應透過這裡提供的非同步函式存取本地資料。
+// 儲存層核心模組：負責標籤階層、SRS 計算、每日限制與偏好設定等資料操作。
+// 職責說明：
+// - 提供統一的 AsyncStorage key 與存取函式，減少頁面直接操作原生 API 的風險。
+// - 維護標籤的階層結構（parse/join/normalize）與排序規則，供收藏庫與測驗等功能使用。
+// - 處理 SRS 寫入、每日練習限制、單字增刪編等高頻邏輯，確保其他模組透過這裡的介面即可完成資料更新。
 
 // ---- Hierarchical tag helpers (path string, max 3 levels) ----
 export const TAG_DELIM = ">"; // display as: A > B > C
@@ -44,6 +47,8 @@ export function pathStartsWith(childPath: string, parentPath: string): boolean {
   return c.startsWith(p + ` ${TAG_DELIM} `);
 }
 
+// 將平面化的路徑字串轉成樹狀結構，供 UI 顯示標籤階層（含最多三層的巢狀節點）。
+// 系統保留標籤（REVIEW/EXAM）不會出現在樹形結構中，避免被使用者拖曳。
 export function buildTagTree(paths: string[]): TagNode[] {
   const root: Map<string, any> = new Map();
   for (const raw of paths) {
@@ -109,6 +114,7 @@ function sortByOrder(children: TagNode[] | undefined, parentPath: string, order:
   return named;
 }
 
+// 根據儲存在 AsyncStorage 的排序資訊（TagOrder）重建樹狀節點的兄弟順序，拖曳操作亦依此更新。
 export function applyOrderToTree(nodes: TagNode[], parentPath: string, order: TagOrder): TagNode[] {
   const sorted = sortByOrder(nodes, parentPath, order) || [];
   return sorted.map((node) => ({

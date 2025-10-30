@@ -8,6 +8,10 @@ import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
 import { useI18n } from "@/i18n";
 
+// AI 探索頁：輸入單字或中文關鍵字後，呼叫 OpenAI 產生翻譯、例句並快速寫入字庫。
+// 亦提供朗讀、標籤預設與結果提示，協助使用者快速擴充單字量。
+// 使用流程：讀取既有單字 → 呼叫 AI → 以 `saveWords` 寫回 → 以 `TabMarkContext` 提醒其他分頁刷新。
+
 const AI_NOTE_CALLING = "\u0041\u0049\u003a\u0020\u547c\u53eb\u4e2d\u002e\u002e\u002e";
 const AI_NOTE_NO_FIELDS = "\u0041\u0049\u003a\u0020\u5df2\u56de\u50b3\uff0c\u4f46\u627e\u4e0d\u5230\u53ef\u586b\u5165\u7684\u6b04\u4f4d";
 const AI_ALERT_PREFIX = "\u8a3a\u65b7";
@@ -15,6 +19,8 @@ const AI_ALERT_BODY_PREFIX =
   "\u0041\u0049\u0020\u5df2\u56de\u50b3\u8cc7\u6599\uff0c\u4f46\u627e\u4e0d\u5230\u53ef\u586b\u5165\u7684\u6b04\u4f4d\u3002\u000a\u56de\u50b3\u7247\u6bb5\uff1a";
 const AI_NOTE_UPDATED_PREFIX = "\u0041\u0049\u003a\u0020\u5df2\u66f4\u65b0\u0020\u2192\u0020";
 const AI_NOTE_FAILED_PREFIX = "\u0041\u0049\u003a\u0020\u5931\u6557\u0020";
+
+// 畫面負責：維護輸入欄位狀態、處理 AI 回傳結果、寫入 AsyncStorage，並依情境導向新增或測驗頁。
 export default function Explore() {
   const router = useRouter();
   const { setMarkedTab } = useTabMark();

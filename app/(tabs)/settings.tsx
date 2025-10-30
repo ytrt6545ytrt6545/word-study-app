@@ -13,11 +13,16 @@ import { makeRedirectUri } from "expo-auth-session";
 import Constants from "expo-constants";
 import { buildBackupPayload, uploadBackupToDrive, downloadLatestBackupFromDrive, applyBackupPayload, exportBackupToDevice, importBackupFromDevice } from "@/utils/backup";
 
+// 設定頁整合 TTS、SRS、字體與備份等偏好；同時提供 Google Drive 匯入匯出與語系切換入口。
+// 請先透過 `hydrateSettings` 讀取所有 AsyncStorage 設定，再由個別控件（Slider / Picker / Button）呼叫對應 save 函式。
+
 // Move maybeCompleteAuthSession into effect to avoid edge-case crashes on some devices
 // and ensure it only runs after module load.
 
 const ENABLE_GOOGLE_SIGNIN = false;
 
+// 畫面生命周期：載入目前偏好、處理語音下拉與滑桿變更、串接備份 API，並提示使用者重新整理資料。
+// 每次成功儲存設定後會觸發 `refreshAllData`，確保其他分頁（如收藏庫、閱讀頁）即時反映變更。
 export default function Settings() {
   const { t, locale, setLocale } = useI18n();
   const [accessToken, setAccessToken] = useState<string | null>(null);

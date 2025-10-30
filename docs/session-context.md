@@ -156,3 +156,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - `npx tsc --noEmit` 仍會因既有的 `types/chinese-conv.d.ts` 編碼問題報錯（Invalid character）；和本次調整無關，待後續整理該型別檔再解決。
 - 持續遵循建置前清理 release 目錄與執行 `scripts/setup-android-build-env.ps1` 的流程，避免沿用舊輸出或環境變數記錯。
 
+## 未來工作重點：UI 視覺強化
+- 建立統一的設計語言：定義品牌色、字體階層、卡片陰影與圓角等 Style Token，並整理至 `Resources/Styles.*` 供 Expo 與未來 MAUI 版本共用參考。
+- 重構主要頁面（單字、文章、閱讀、設定）為卡片式版面與分區導覽，搭配標籤 Chips、圖示、進度提示與空狀態插圖，讓資訊層次更分明。
+- 增加互動細節：導入骨架畫面、列表載入動畫、按鈕縮放與錯誤提示，提升整體商用級質感。
+- 規劃暗色模式與品牌化開場畫面（Logo、主題背景），確保跨平台體驗一致。

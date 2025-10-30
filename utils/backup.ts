@@ -8,10 +8,16 @@ import { loadArticleTagOrder, loadArticleTags, loadArticles, saveArticleTagOrder
 import { loadTags, loadWords, saveTags, saveWords } from './storage';
 import type { Word } from './storage';
 
+// 備份模組：封裝 AsyncStorage 鍵值的匯入匯出，支援 Google Drive、檔案系統與本機 JSON。
+// 資料流分成三層：
+// 1. BACKUP_KEYS 定義要同步的偏好與資料表（單字、標籤、文章、TTS、SRS 等）。
+// 2. build/apply 函式負責在多個端點之間序列化與還原資料。
+// 3. export/import/upload/download 則處理對外管道（本機檔案、雲端、共享面板）。
 // Minimal Google Drive helpers for appDataFolder backup/restore.
 // These functions expect a valid OAuth access token with scope
 // https://www.googleapis.com/auth/drive.appdata
 
+// 備份覆蓋的鍵值清單：保持順序可確保日後 diff 與備份版本一致。
 export const BACKUP_KEYS = [
   '@halo_words',
   '@halo_tags',
@@ -34,6 +40,8 @@ export const BACKUP_KEYS = [
   '@lang_locale',
 ];
 
+// 將關聯鍵值一次打包成統一結構，方便寫入雲端或本機備份檔。
+// payload 內每個 key 都維持字串型別，利於不同平台序列化與除錯。
 export async function buildBackupPayload(): Promise<{ schemaVersion: number; updatedAt: string; payload: Record<string, string | null> }> {
   const pairs = await AsyncStorage.multiGet(BACKUP_KEYS);
   const payload: Record<string, string | null> = {};
@@ -45,6 +53,11 @@ export async function buildBackupPayload(): Promise<{ schemaVersion: number; upd
   };
 }
 
+// 匯入備份時按鍵值覆寫或移除，並回寫文章、標籤相關結構避免格式殘留。
+// 操作流程：
+// 1. 解析 payload，先記錄要刪除（null）與要覆寫的鍵。
+// 2. 使用 AsyncStorage.multiRemove/multiSet 批次更新，減少 I/O 次數。
+// 3. 對核心資料（單字、標籤、文章）再走一次 normalize 流程，確保 schema 正確。
 export async function applyBackupPayload(obj: any): Promise<void> {
   if (!obj || typeof obj !== 'object' || typeof obj.payload !== 'object') {
     throw new Error('備份檔案格式不正確（缺少 payload）。');
@@ -181,6 +194,8 @@ async function findExisting(token: string): Promise<string | undefined> {
   return json.files?.[0]?.id as string | undefined;
 }
 
+// 透過 appDataFolder API 將最新備份上傳至使用者的 Google Drive。
+// 若雲端已有舊檔，會先刪除再建立，以維持單一備份並避免空間膨脹。
 export async function uploadBackupToDrive(token: string, bodyJson?: any): Promise<void> {
   const dataObj = bodyJson ?? (await buildBackupPayload());
   const meta = JSON.stringify({ name: 'backup.json', parents: ['appDataFolder'] });
@@ -211,6 +226,8 @@ export async function uploadBackupToDrive(token: string, bodyJson?: any): Promis
   if (!res.ok) throw new Error('Drive upload failed');
 }
 
+// 從 appDataFolder 取得最近的備份檔案，找不到時回傳 null。
+// 呼叫端可依結果決定是否顯示「尚未備份」提醒。
 export async function downloadLatestBackupFromDrive(token: string): Promise<any | null> {
   const id = await findExisting(token);
   if (!id) return null;
@@ -286,11 +303,16 @@ async function exportBackupViaShare(json: string, fileName: string): Promise<str
   return '已匯出備份檔案';
 }
 
+// 匯出成 JSON 檔並寫到裝置的 Cache 目錄，回傳檔案路徑供分享或下載。
 export async function exportBackupToDevice(): Promise<string> {
   const dataObj = await buildBackupPayload();
   const json = JSON.stringify(dataObj, null, 2);
   const fileName = formatBackupFileName();
 
+  // 依平台選擇最貼近使用者體驗的出口：
+  // - Web：直接觸發瀏覽器下載。
+  // - Android：透過 SAF 讓使用者挑選目的資料夾。
+  // - 其他（iOS 等）：寫入 cache 後啟動分享選單。
   if (Platform.OS === 'web') {
     return exportBackupOnWeb(json, fileName);
   }
@@ -332,6 +354,8 @@ async function readTextFromAsset(asset: any): Promise<string> {
   return await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
 }
 
+// 從使用者選擇的 JSON 檔讀取備份內容並套用至本機。
+// 流程會依平台選擇適合的檔案挑選器，並將檔案內容轉成字串再解析成 JSON。
 export async function importBackupFromDevice(): Promise<any | null> {
   if (Platform.OS === 'web') {
     try {

@@ -10,6 +10,14 @@ import { aiCompleteWord, AIFillResult, recognizeImageText } from '@/utils/ai';
 import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from '@/utils/articles';
 import { addTag, loadTags, loadWords, normalizeTagPath, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
+
+// 閱讀頁面：整合文章顯示、圖像 OCR 匯入、單字查詢與收藏標籤。
+// 主要工作流程：
+// 1. 依 `articleId` 載入既有文章，或接受使用者貼上的原文。
+// 2. 透過 `DocumentPicker` + `recognizeImageText` 將圖片轉成文字並注入閱讀區。
+// 3. 將點選的單字送往 AI 取得翻譯、音標、例句，並提供加入字庫的動作。
+// 4. 協助建立/選取標籤與收藏，再同步寫入 AsyncStorage。
+// 5. 文章與標籤會回寫至 `utils/articles` 與 `utils/storage`，讓收藏庫與備份流程讀到一致資料。
 type TokenKind = 'en' | 'zh' | 'number' | 'newline' | 'other';
 type Token = { key: string; text: string; kind: TokenKind };
 type ReadingChunk = {
@@ -51,6 +59,7 @@ const normalizeNumberForSpeech = (value: string): string => {
     .join('');
 };
 
+// 將貼上的長文拆解成英文、中文、數字與其他標記，方便後續渲染與語音朗讀。
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   if (!text) return tokens;
@@ -187,6 +196,7 @@ const sortTagsWithReviewFirst = (tags: Iterable<string | null | undefined>): str
   return list;
 };
 
+// 閱讀畫面主元件：處理文章載入、朗讀設定、AI 查詢結果與收藏互動。
 export default function ReadingScreen() {
   const { t, locale } = useI18n();
   const [rawText, setRawText] = useState('');
