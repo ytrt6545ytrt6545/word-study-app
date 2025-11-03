@@ -13,6 +13,7 @@ const dict = {
     'tabs.reading': '閱讀',
     'tabs.words': '單字',
     'tabs.articles': '收藏',
+    'tabs.practice': '練習',
     'tabs.settings': '設定',
 
     // Common
@@ -114,6 +115,23 @@ const dict = {
     'word.confirmDelete.title': '刪除單字',
     'word.confirmDelete.message': '確定刪除「{word}」？',
 
+    // Practice
+    'practice.title': '樣式練習',
+    'practice.previewNote': '上方文字會即時套用設定。',
+    'practice.color': '色值',
+    'practice.fontSize': '字級',
+    'practice.fontFamily': '字體',
+    'practice.shadow': '陰影',
+    'practice.shadowColor': '陰影色值',
+    'practice.offsetX': '水平位移',
+    'practice.offsetY': '垂直位移',
+    'practice.radius': '模糊半徑',
+    'practice.spacing': '間距',
+    'practice.quickColors': '快速選色',
+    'practice.fontSystem': '系統',
+    'practice.fontSerif': '襯線',
+    'practice.fontMono': '等寬',
+
     // Settings
     'settings.title': '設定',
     'settings.dailyLimit': '複習每日上限',
@@ -200,6 +218,10 @@ const dict = {
     'reading.ocr.error.noData': '無法讀取這張圖片，請改選其他檔案。',
     'reading.ocr.error.noText': '辨識不到文字，請改用其他圖片。',
     'reading.ocr.error.generic': '辨識失敗：{message}',
+    'reading.controls.start': '朗讀',
+    'reading.controls.pause': '暫停',
+    'reading.controls.resume': '繼續',
+    'reading.controls.stop': '停止',
 
     'articles.loadError': '讀取收藏失敗：{message}',
     'articles.delete': '刪除',
@@ -222,6 +244,7 @@ const dict = {
     'tabs.reading': 'Reading',
     'tabs.words': 'Words',
     'tabs.articles': 'Library',
+    'tabs.practice': 'Playground',
     'tabs.settings': 'Settings',
 
     'common.cancel': 'Cancel',
@@ -317,6 +340,23 @@ const dict = {
     'word.confirmDelete.title': 'Delete Word',
     'word.confirmDelete.message': 'Delete "{word}"?',
 
+    // Practice
+    'practice.title': 'Style Playground',
+    'practice.previewNote': 'Changes apply to the sample text above.',
+    'practice.color': 'Color',
+    'practice.fontSize': 'Font Size',
+    'practice.fontFamily': 'Font Family',
+    'practice.shadow': 'Shadow',
+    'practice.shadowColor': 'Shadow Color',
+    'practice.offsetX': 'Offset X',
+    'practice.offsetY': 'Offset Y',
+    'practice.radius': 'Blur Radius',
+    'practice.spacing': 'Spacing',
+    'practice.quickColors': 'Quick swatches',
+    'practice.fontSystem': 'System',
+    'practice.fontSerif': 'Serif',
+    'practice.fontMono': 'Monospace',
+
     'settings.title': 'Settings',
     'settings.dailyLimit': 'Daily Limits',
     'settings.newLimit': 'New limit: {n}',
@@ -401,6 +441,10 @@ const dict = {
     'reading.ocr.error.noData': 'Could not read the selected image. Please try another file.',
     'reading.ocr.error.noText': 'No text was detected in this image.',
     'reading.ocr.error.generic': 'Failed to extract text: {message}',
+    'reading.controls.start': 'Read aloud',
+    'reading.controls.pause': 'Pause',
+    'reading.controls.resume': 'Resume',
+    'reading.controls.stop': 'Stop',
 
     'articles.loadError': 'Failed to load articles: {message}',
     'articles.delete': 'Delete',

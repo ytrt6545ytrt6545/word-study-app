@@ -20,6 +20,7 @@ const MAPPING = {
   'list.bullet': 'format-list-bulleted',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'slider.horizontal.3': 'tune',
 } as IconMapping;
 
 /**

@@ -161,3 +161,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - é‡æ§‹ä¸»è¦é é¢ï¼ˆå–®å­—ã€æ–‡ç« ã€é–±è®€ã€è¨­å®šï¼‰ç‚ºå¡ç‰‡å¼ç‰ˆé¢èˆ‡åˆ†å€å°è¦½ï¼Œæ­é…æ¨™ç±¤ Chipsã€åœ–ç¤ºã€é€²åº¦æç¤ºèˆ‡ç©ºç‹€æ…‹æ’åœ–ï¼Œè®“è³‡è¨Šå±¤æ¬¡æ›´åˆ†æ˜ã€‚
 - å¢åŠ äº’å‹•ç´°ç¯€ï¼šå°å…¥éª¨æ¶ç•«é¢ã€åˆ—è¡¨è¼‰å…¥å‹•ç•«ã€æŒ‰éˆ•ç¸®æ”¾èˆ‡éŒ¯èª¤æç¤ºï¼Œæå‡æ•´é«”å•†ç”¨ç´šè³ªæ„Ÿã€‚
 - è¦åŠƒæš—è‰²æ¨¡å¼èˆ‡å“ç‰ŒåŒ–é–‹å ´ç•«é¢ï¼ˆLogoã€ä¸»é¡ŒèƒŒæ™¯ï¼‰ï¼Œç¢ºä¿è·¨å¹³å°é«”é©—ä¸€è‡´ã€‚
+## 2025-10-31 ¥æ±µ¬ö¿ı
+- ·s¼W `app/(tabs)/practice.tsx` ½m²ß¤À­¶¡A´£¨Ñ¦â­È¡B¦r¯Å¡B¦rÅé¡B¶¡¶Z»P³±¼vªº§Y®É½Õ¾ã¥Ü½d¡A¨Ã§ó·s `_layout.tsx`¡B`components/ui/IconSymbol.tsx` »P `i18n/index.tsx` ªº¹ïÀ³³]©w¡C
+- `app/(tabs)/reading.tsx` ¥[¤J `onStopReading` °±¤î®ÔÅªÅŞ¿è¡A®ÔÅª±±¨î¦C§ï¥Î i18n ¤å®×¨Ã·s¼W¡u°±¤î¡v¡A`i18n/index.tsx` ¦P¨B¸É¤W¤¤­^¤å¦r¦ê¡C
+- ­«·s°õ¦æ `./gradlew.bat assembleRelease`¡A³Ì·s APK ¦ì¸m¡G`android/app/build/outputs/apk/release/app-release.apk`¡C
+- ¤´«İ³B²z¡G`types/chinese-conv.d.ts` ½s½X¿ù»~¾É­P `npx tsc --noEmit` ¥¢±Ñ¡F®ÔÅª§ïª©¤w©ó¼ÒÀÀ¾¹´ú¸Õ¡A«ØÄ³¯u¾÷¦AÅçÃÒ¤@¦¸°±/¼È±±¨î¬O§_¥¿±`¡C

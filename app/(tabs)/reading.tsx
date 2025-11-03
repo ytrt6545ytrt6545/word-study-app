@@ -858,6 +858,18 @@ export default function ReadingScreen() {
     runReading();
   }, [isReading, runReading]);
 
+  const onStopReading = useCallback(() => {
+    if (!isReading) return;
+    runnerRef.current.paused = false;
+    runnerRef.current.index = runnerRef.current.chunks.length;
+    runnerRef.current.running = false;
+    setIsReading(false);
+    setIsPaused(false);
+    setReadingIndex(-1);
+    setReadingEndIndex(-1);
+    try { Speech.stop(); } catch {}
+  }, [isReading]);
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
@@ -997,11 +1009,13 @@ export default function ReadingScreen() {
 
       {/* Toolbar */}
       <View style={styles.toolbar}>
-        <Button title={'朗讀'} onPress={onStartReading} disabled={isReading && !isPaused} />
+        <Button title={t('reading.controls.start')} onPress={onStartReading} disabled={isReading && !isPaused} />
         <View style={{ width: 8 }} />
-        <Button title={'暫停'} onPress={onPauseReading} disabled={!isReading || isPaused} />
+        <Button title={t('reading.controls.pause')} onPress={onPauseReading} disabled={!isReading || isPaused} />
         <View style={{ width: 8 }} />
-        <Button title={'繼續'} onPress={onResumeReading} disabled={!isReading || !isPaused} />
+        <Button title={t('reading.controls.resume')} onPress={onResumeReading} disabled={!isReading || !isPaused} />
+        <View style={{ width: 8 }} />
+        <Button title={t('reading.controls.stop')} onPress={onStopReading} disabled={!isReading} />
       </View>
 
       {/* Modal */}
