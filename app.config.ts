@@ -33,7 +33,7 @@ const projectConfig: ExpoConfig = {
   slug: "bwcystapp",
   version,
   orientation: "portrait",
-  icon: "./Vocab.png",
+  icon: "./newlogo.png",
   scheme: [
     "haloword",
     "com.googleusercontent.apps.1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb",
@@ -48,7 +48,7 @@ const projectConfig: ExpoConfig = {
     versionCode: androidVersionCode,
     package: "com.bwcyst.chiwordstudy",
     adaptiveIcon: {
-      foregroundImage: "./Vocab.png",
+      foregroundImage: "./newlogo.png",
       backgroundColor: "#ffffff",
     },
     edgeToEdgeEnabled: true,

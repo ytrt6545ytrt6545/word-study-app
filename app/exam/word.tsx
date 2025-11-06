@@ -27,6 +27,7 @@ export default function WordExam() {
   const [input, setInput] = useState('');
   const [showCorrect, setShowCorrect] = useState(false);
   const [showWrong, setShowWrong] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [loading, setLoading] = useState(true);
   const inputRef = useRef<TextInput>(null);
 
@@ -53,6 +54,7 @@ export default function WordExam() {
       setInput('');
       setShowCorrect(false);
       setShowWrong(false);
+      setShowHint(false);
     }
   }, [candidates]);
 
@@ -70,6 +72,7 @@ export default function WordExam() {
     await delay(1000);
     setInput('');
     setShowCorrect(false);
+    setShowHint(false);
     setIdx((n) => (n + 1 < order.length ? n + 1 : 0));
   }, [order.length]);
 
@@ -78,6 +81,7 @@ export default function WordExam() {
     setInput('');
     setShowCorrect(false);
     setShowWrong(false);
+    setShowHint(false);
   }, [current]);
 
   const normalizedEquals = (a: string, b: string) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
@@ -114,23 +118,27 @@ export default function WordExam() {
       setInput('');
       setShowCorrect(false);
       setShowWrong(false);
+      setShowHint(false);
     } catch {}
   }, [current]);
 
-  // 將使用者輸入與正解逐字比對，產生彩色差異標記供畫面顯示。
-  const renderTypedWithDiff = (answer: string, typed: string) => {
-    const a = (answer || '').trim();
-    const t = (typed || '').trim();
-    const len = Math.max(a.length, t.length);
-    const nodes: ReactNode[] = [];
-    for (let i = 0; i < len; i++) {
-      const ch = t[i] || '';
-      const ok = (a[i] || '').toLowerCase() === (ch || '').toLowerCase();
-      nodes.push(
-        <Text key={i} style={ok ? styles.typedOk : styles.typedWrong}>{ch || ''}</Text>
-      );
-    }
-    return <Text style={styles.typedLine}>{nodes}</Text>;
+  // 將單字轉成提示格式：保留首字與末兩字，其餘以紅色星號呈現。
+  const renderHintPreview = (answer: string): ReactNode => {
+    const trimmed = (answer || '').trim();
+    if (!trimmed) return null;
+    const first = trimmed.slice(0, 1);
+    const tailCount = Math.min(2, Math.max(trimmed.length - 1, 0));
+    const tail = tailCount > 0 ? trimmed.slice(trimmed.length - tailCount) : '';
+    const middleCount = Math.max(trimmed.length - (1 + tailCount), 0);
+    return (
+      <Text style={styles.hintLine}>
+        <Text style={styles.hintLetter}>{first}</Text>
+        {Array.from({ length: middleCount }).map((_, i) => (
+          <Text key={`hint-star-${i}`} style={styles.hintStar}>*</Text>
+        ))}
+        <Text style={styles.hintLetter}>{tail}</Text>
+      </Text>
+    );
   };
 
   if (loading) {
@@ -179,12 +187,13 @@ export default function WordExam() {
           <View style={{ height: 8 }} />
           <Button title={t('common.submit')} onPress={onSubmit} />
           <View style={{ height: 8 }} />
+          <Button title={t('exam.word.hint')} onPress={() => setShowHint(true)} />
+          <View style={{ height: 8 }} />
           <Button title={t('exam.word.removeTag')} onPress={onRemoveExamTag} />
 
-          {input.trim().length > 0 && !normalizedEquals(input, current.en) && (
-            <View style={{ marginTop: 12 }}>
-              <Text style={styles.correctLine}>{current.en}</Text>
-              {renderTypedWithDiff(current.en, input)}
+          {showHint && (
+            <View style={styles.hintContainer}>
+              {renderHintPreview(current.en)}
             </View>
           )}
 
@@ -224,10 +233,10 @@ const styles = StyleSheet.create({
   zhRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center' },
   zh: { fontSize: 20 },
   input: { marginTop: 12, alignSelf: 'stretch', borderWidth: 1, borderColor: '#bbb', borderRadius: 8, padding: 12, fontSize: 18, backgroundColor: '#f9fafb' },
-  correctLine: { color: '#2e7d32', fontSize: 18, fontWeight: '600' },
-  typedLine: { marginTop: 4, fontSize: 18 },
-  typedOk: { color: '#000' },
-  typedWrong: { color: '#c62828', fontWeight: 'bold' },
+  hintContainer: { marginTop: 12 },
+  hintLine: { fontSize: 20, fontWeight: '600' },
+  hintLetter: { color: '#000' },
+  hintStar: { color: '#c62828', fontSize: 20, fontWeight: '700' },
   correctOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#a5d6a7', alignItems: 'center', justifyContent: 'center' },
   correctText: { color: '#1b5e20', fontSize: 28, fontWeight: 'bold' },
   hint: { color: '#666', marginTop: 6, textAlign: 'center' },

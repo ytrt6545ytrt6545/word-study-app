@@ -4,7 +4,7 @@
     "slug": "bwcystapp",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./Vocab.png",
+    "icon": "./newlogo.png",
     "scheme": [
       "haloword",
       "com.googleusercontent.apps.1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb"
@@ -20,7 +20,7 @@
       "versionCode": 2,
       "package": "com.bwcyst.chiwordstudy",
       "adaptiveIcon": {
-        "foregroundImage": "./Vocab.png",
+        "foregroundImage": "./newlogo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
