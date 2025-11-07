@@ -1,4 +1,5 @@
-請用中文溝通(不要刪這條)
+cd C:\word-study-app
+(不要刪這條)
 當我說起動WEB時請透過 Start-Process 在背景啟動(不要刪這條)
 當我說結束工作時請把這次對話視窗所執行的工作成果及需要交接的資訊更新交接的檔案，讓下次開新視窗時，新的AI能快速了解情況。(不要刪這條)
 閱讀 README.md 了解程式(不要刪這條)
@@ -55,6 +56,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - 避免修改 android-keys/ 與 credentials.json 等敏感檔案。
 - 若遇到中文亂碼，確認終端機與檔案皆使用 UTF-8 編碼。
 - 朗讀流程依賴 `getSpeechOptions` 取得語速與音高，調整設定後記得重新整理 Expo Web。
+
+## 暫存資料管理
+- 所有臨時輸出統一放在 `scripts/.cache/`，需要長期保留可在底下自行建立子資料夾分類，避免污染版本庫。
+- 既有 `tmp_*.txt`、`tmp_ai_test.js`、`expo-web.log` 等暫存檔案已清除並加入 `.gitignore`，如需再次產生請放進 `scripts/.cache/`。
+- 提供 `scripts/clean-temp-artifacts.ps1` 自動清理腳本，可用 `powershell -ExecutionPolicy Bypass -File .\scripts\clean-temp-artifacts.ps1` 執行；搭配 `-DryRun` 可預覽，`-PurgeCache` 會一併清空 `.cache` 內容。
 
 ## 近期工作重點：閱讀後文章收藏與分類方案
 

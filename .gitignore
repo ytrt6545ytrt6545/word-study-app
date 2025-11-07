@@ -45,6 +45,10 @@ android/
 
 *.log
 
+## sensitive credentials (avoid committing signing keys)
+android-keys/
+credentials.json
+
 
 *.apk
 
@@ -52,3 +56,13 @@ android/
 *.tgz
 
 tmp_line.txt
+tmp_*.txt
+tmp_*.diff
+tmp_ai_test.js
+expo-web.log
+scripts/.cache/
+
+# sensitive files
+android-keys/
+credentials.json
+eas.json
