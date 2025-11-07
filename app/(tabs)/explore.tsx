@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Button, ScrollView, StyleSheet, Text, TextInput, View, Pressable } from "react-native";
 import { loadWords, saveWords, Word, REVIEW_TAG } from "@/utils/storage";
 import { aiCompleteWord, resolveOpenAIKey } from "@/utils/ai";
 import { useTabMark } from "@/context/TabMarkContext";
@@ -167,80 +167,148 @@ export default function Explore() {
   return (
     <View style={styles.container}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <Text style={styles.title}>{t("explore.title")}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Button title={t("explore.clear")} onPress={onClear} />
-            <Button title={t("explore.preview")} onPress={() => speakWordTwice(en)} />
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>✨ {t("explore.title")}</Text>
         </View>
-        <TextInput
-          style={styles.input}
-          placeholder={t("explore.input.en")}
-          value={en}
-          onChangeText={setEn}
-          autoCapitalize="none"
-          onFocus={() => {
-            if (en.trim() && zh.trim()) setZh("");
-          }}
-        />
-        <TextInput
-          style={[styles.input, styles.inputMultiline, { height: zhHeight }]}
-          placeholder={t("explore.input.zh")}
-          value={zh}
-          onChangeText={setZh}
-          multiline
-          scrollEnabled={false}
-          onFocus={() => {
-            if (en.trim() && zh.trim()) setEn("");
-          }}
-          onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
-        />
-        <Text style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]} onLayout={(e) => setExEnHeight(Math.max(40, e.nativeEvent.layout.height))}>
-          {exEn || " "}
-        </Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
-          placeholder={t("explore.input.exEn")}
-          value={exEn}
-          onChangeText={setExEn}
-          multiline
-          scrollEnabled={false}
-          onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
-        />
-        <Text style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]} onLayout={(e) => setExZhHeight(Math.max(40, e.nativeEvent.layout.height))}>
-          {exZh || " "}
-        </Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
-          placeholder={t("explore.input.exZh")}
-          value={exZh}
-          onChangeText={setExZh}
-          multiline
-          scrollEnabled={false}
-          onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
-        />
-        <View style={styles.rowButtons}>
-          <Button title={aiLoading ? t("explore.ai.loading") : t("explore.ai")} onPress={onAIFill} disabled={aiLoading} />
-          {aiLoading && <ActivityIndicator style={{ marginLeft: 8 }} />}
+
+        <View style={styles.quickActions}>
+          <Pressable
+            style={styles.quickButton}
+            onPress={() => speakWordTwice(en)}
+          >
+            <Text style={styles.quickButtonText}>🔊 {t("explore.preview")}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.quickButton, styles.clearButton]}
+            onPress={onClear}
+          >
+            <Text style={styles.quickButtonText}>🗑️ {t("explore.clear")}</Text>
+          </Pressable>
         </View>
-        {!!aiNote && <Text style={{ color: "#666", marginBottom: 8 }}>{aiNote}</Text>}
-        <Button title={t("explore.add")} onPress={addWord} />
-        {defaultTag ? (
-          <View style={{ marginTop: 10 }}>
-            <Button title={t("explore.backToTag")} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: defaultTag } })} />
+
+        <View style={styles.formCard}>
+          <Text style={styles.sectionLabel}>📝 英文單字</Text>
+          <TextInput
+            style={styles.input}
+            placeholder={t("explore.input.en")}
+            value={en}
+            onChangeText={setEn}
+            autoCapitalize="none"
+            placeholderTextColor="#999"
+            onFocus={() => {
+              if (en.trim() && zh.trim()) setZh("");
+            }}
+          />
+
+          <Text style={styles.sectionLabel}>🌐 中文翻譯</Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline, { height: zhHeight }]}
+            placeholder={t("explore.input.zh")}
+            value={zh}
+            onChangeText={setZh}
+            multiline
+            scrollEnabled={false}
+            placeholderTextColor="#999"
+            onFocus={() => {
+              if (en.trim() && zh.trim()) setEn("");
+            }}
+            onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+          />
+
+          <Text style={styles.sectionLabel}>💬 英文例句</Text>
+          <Text style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]} onLayout={(e) => setExEnHeight(Math.max(40, e.nativeEvent.layout.height))}>
+            {exEn || " "}
+          </Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
+            placeholder={t("explore.input.exEn")}
+            value={exEn}
+            onChangeText={setExEn}
+            multiline
+            scrollEnabled={false}
+            placeholderTextColor="#999"
+            onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+          />
+
+          <Text style={styles.sectionLabel}>📖 例句翻譯</Text>
+          <Text style={[styles.input, styles.inputMultiline, styles.hiddenMeasure]} onLayout={(e) => setExZhHeight(Math.max(40, e.nativeEvent.layout.height))}>
+            {exZh || " "}
+          </Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
+            placeholder={t("explore.input.exZh")}
+            value={exZh}
+            onChangeText={setExZh}
+            multiline
+            scrollEnabled={false}
+            placeholderTextColor="#999"
+            onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+          />
+        </View>
+
+        <View style={styles.aiSection}>
+          <Pressable
+            style={[styles.aiButton, aiLoading && styles.aiButtonLoading]}
+            onPress={onAIFill}
+            disabled={aiLoading}
+          >
+            <Text style={styles.aiButtonText}>
+              {aiLoading ? '⏳ ' : '🤖 '}{aiLoading ? t("explore.ai.loading") : t("explore.ai")}
+            </Text>
+          </Pressable>
+          {aiLoading && <ActivityIndicator style={{ marginLeft: 12 }} />}
+        </View>
+
+        {!!aiNote && (
+          <View style={styles.noteContainer}>
+            <Text style={styles.noteText}>{aiNote}</Text>
           </View>
-        ) : null}
+        )}
+
+        <View style={styles.actionButtons}>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={addWord}
+          >
+            <Text style={styles.primaryButtonText}>➕ {t("explore.add")}</Text>
+          </Pressable>
+
+          {defaultTag ? (
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: defaultTag } })}
+            >
+              <Text style={styles.secondaryButtonText}>⬅️ {t("explore.backToTag")}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold" },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, marginBottom: 8, backgroundColor: "#fff", width: "100%" },
+  container: { flex: 1, backgroundColor: "#f5f7fa" },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  title: { fontSize: 28, fontWeight: "700", color: "#1a1a1a" },
+  quickActions: { paddingHorizontal: 16, paddingBottom: 16, flexDirection: "row", gap: 12 },
+  quickButton: { flex: 1, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "#e8f4f8", borderRadius: 10, borderWidth: 2, borderColor: "#0a7ea4", alignItems: "center" },
+  clearButton: { backgroundColor: "#ffebee", borderColor: "#e74c3c" },
+  quickButtonText: { color: "#0a7ea4", fontSize: 14, fontWeight: "700" },
+  formCard: { marginHorizontal: 16, marginBottom: 16, padding: 16, backgroundColor: "#fff", borderRadius: 14, borderWidth: 2, borderColor: "#ddd" },
+  sectionLabel: { fontSize: 14, fontWeight: "700", color: "#1a1a1a", marginBottom: 8, marginTop: 12 },
+  input: { borderWidth: 2, borderColor: "#ddd", padding: 12, borderRadius: 10, marginBottom: 12, backgroundColor: "#f9fafb", width: "100%", fontSize: 16, color: "#1a1a1a" },
   inputMultiline: { textAlignVertical: "top" as const },
-  rowButtons: { flexDirection: "row", gap: 10, marginBottom: 12, alignItems: "center" },
+  aiSection: { marginHorizontal: 16, marginBottom: 16, flexDirection: "row", alignItems: "center" },
+  aiButton: { flex: 1, paddingVertical: 14, backgroundColor: "#4CAF50", borderRadius: 12, alignItems: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
+  aiButtonLoading: { opacity: 0.8 },
+  aiButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  noteContainer: { marginHorizontal: 16, marginBottom: 16, padding: 12, backgroundColor: "#e8f4f8", borderLeftWidth: 4, borderLeftColor: "#0a7ea4", borderRadius: 8 },
+  noteText: { color: "#0a7ea4", fontSize: 13, fontWeight: "600" },
+  actionButtons: { marginHorizontal: 16, gap: 12 },
+  primaryButton: { paddingVertical: 16, backgroundColor: "#2196F3", borderRadius: 12, alignItems: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
+  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  secondaryButton: { paddingVertical: 14, backgroundColor: "#f0f0f0", borderRadius: 12, alignItems: "center", borderWidth: 2, borderColor: "#ddd" },
+  secondaryButtonText: { color: "#1a1a1a", fontSize: 15, fontWeight: "600" },
   hiddenMeasure: { position: "absolute", opacity: 0, zIndex: -1, left: 0, right: 0, includeFontPadding: true },
 });

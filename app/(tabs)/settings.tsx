@@ -13,16 +13,8 @@ import { makeRedirectUri } from "expo-auth-session";
 import Constants from "expo-constants";
 import { buildBackupPayload, uploadBackupToDrive, downloadLatestBackupFromDrive, applyBackupPayload, exportBackupToDevice, importBackupFromDevice } from "@/utils/backup";
 
-// 設定頁整合 TTS、SRS、字體與備份等偏好；同時提供 Google Drive 匯入匯出與語系切換入口。
-// 請先透過 `hydrateSettings` 讀取所有 AsyncStorage 設定，再由個別控件（Slider / Picker / Button）呼叫對應 save 函式。
-
-// Move maybeCompleteAuthSession into effect to avoid edge-case crashes on some devices
-// and ensure it only runs after module load.
-
 const ENABLE_GOOGLE_SIGNIN = false;
 
-// 畫面生命周期：載入目前偏好、處理語音下拉與滑桿變更、串接備份 API，並提示使用者重新整理資料。
-// 每次成功儲存設定後會觸發 `refreshAllData`，確保其他分頁（如收藏庫、閱讀頁）即時反映變更。
 export default function Settings() {
   const { t, locale, setLocale } = useI18n();
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -131,100 +123,12 @@ export default function Settings() {
     Speech.speak(text, { language: langCode, voice: opts.voice, rate: opts.rate, pitch: opts.pitch });
   };
 
-  // ---- Google Sign-In (Drive appDataFolder) ----
   useEffect(() => {
     setMounted(true);
     try {
       WebBrowser.maybeCompleteAuthSession();
     } catch {}
   }, []);
-
-  const isExpoGo = Constants.appOwnership === "expo";
-  const redirectUri = makeRedirectUri({ scheme: "haloword" });
-  useEffect(() => {
-    try {
-      console.log("GoogleAuth Debug", {
-        isExpoGo,
-        redirectUri,
-        owner: Constants.expoConfig?.owner,
-        slug: Constants.expoConfig?.slug,
-      });
-    } catch {}
-  }, [redirectUri, isExpoGo]);
-
-  const cfgAndroidClientId = (Constants.expoConfig as any)?.extra?.google?.androidClientId as
-    | string
-    | undefined;
-  const dbgAndroidClientId =
-    cfgAndroidClientId ||
-    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
-    "1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb.apps.googleusercontent.com";
-  const dbgWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  const dbgExpoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || dbgWebClientId;
-
-  const AuthSection = () => {
-    const androidClientId =
-      ((Constants.expoConfig as any)?.extra?.google?.androidClientId as string | undefined) ||
-      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
-      "1040547063297-kghqjd3jrk7oiai1viu6hnp030pi99vb.apps.googleusercontent.com";
-    const [showDebug, setShowDebug] = useState(false);
-    const [request, response, promptAsync] = Google.useAuthRequest({
-      androidClientId,
-      scopes: ["https://www.googleapis.com/auth/drive.appdata"],
-      redirectUri,
-    });
-
-    useEffect(() => {
-      if (response?.type === "success") {
-        const token = response.authentication?.accessToken ?? null;
-        setAccessToken(token);
-        if (token) Alert.alert("Google 登入", "登入成功，已取得存取 App Data Folder 的權限。");
-      } else if (response?.type === "error") {
-        const detail = (response as any)?.error || (response as any)?.params?.error || "error";
-        const desc = (response as any)?.params?.error_description || "";
-        Alert.alert("Google 登入失敗", `${detail}${desc ? `\n${desc}` : ""}`);
-      }
-    }, [response]);
-
-    const onSignIn = async () => {
-      if (!request) {
-        Alert.alert("Google 登入", "登入請求尚未準備完成，請稍後再試。");
-        return;
-      }
-      await promptAsync();
-    };
-
-    return (
-      <View style={{ flexDirection: "row", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <Button
-          title={accessToken ? "已登入" : "登入 Google"}
-          onPress={onSignIn}
-          disabled={!!accessToken || !request || busy}
-        />
-        <Button
-          title={busy ? "備份中…" : "立即備份"}
-          onPress={onBackupNow}
-          disabled={busy || !accessToken}
-        />
-        <Button
-          title={busy ? "還原中…" : "立即還原"}
-          onPress={onRestoreNow}
-          color="#2e7d32"
-          disabled={busy || !accessToken}
-        />
-        {showDebug ? (
-          <View style={{ marginTop: 8 }}>
-            <Text style={styles.dim}>androidClientId: {androidClientId}</Text>
-            <Text style={styles.dim}>redirectUri: {redirectUri}</Text>
-          </View>
-        ) : null}
-        <Button
-          title={showDebug ? "隱藏除錯資訊" : "顯示除錯資訊"}
-          onPress={() => setShowDebug((s) => !s)}
-        />
-      </View>
-    );
-  };
 
   const onBackupNow = async () => {
     if (!accessToken) {
@@ -298,32 +202,64 @@ export default function Settings() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={styles.title}>{t("settings.title")}</Text>
-
-        <Text style={styles.sectionTitle}>本機備份 / 還原</Text>
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-          <Button title={busy ? "匯出中…" : "匯出到裝置"} onPress={onExportLocal} disabled={busy} />
-          <Button title={busy ? "匯入中…" : "從裝置匯入"} onPress={onImportLocal} disabled={busy} />
+        <View style={styles.header}>
+          <Text style={styles.title}>⚙️ {t("settings.title")}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Google 雲端備份</Text>
-        {ENABLE_GOOGLE_SIGNIN && mounted ? (
-          <AuthSection />
-        ) : (
-          <Text style={styles.dim}>目前僅支援備份到 Google 帳號。</Text>
-        )}
-
-        <Text style={styles.sectionTitle}>{t("settings.language")}</Text>
-        <View style={{ marginBottom: 12 }}>
-          <Picker selectedValue={locale} onValueChange={(val) => setLocale(val as Locale)}>
-            <Picker.Item label={t("settings.language.zh")} value={"zh-TW"} />
-            <Picker.Item label={t("settings.language.en")} value={"en"} />
-          </Picker>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="backup" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>本機備份 / 還原</Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            <Pressable 
+              style={styles.actionButton}
+              onPress={onExportLocal}
+              disabled={busy}
+            >
+              <Text style={styles.actionButtonText}>📤 {busy ? "匯出中…" : "匯出到裝置"}</Text>
+            </Pressable>
+            <Pressable 
+              style={styles.actionButton}
+              onPress={onImportLocal}
+              disabled={busy}
+            >
+              <Text style={styles.actionButtonText}>📥 {busy ? "匯入中…" : "從裝置匯入"}</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <Text style={styles.sectionTitle}>{t("settings.dailyLimit")}</Text>
-        <View style={{ marginBottom: 12 }}>
-          <Text>{t("settings.newLimit", { n: dailyNewLimit })}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="cloud" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>Google 雲端備份</Text>
+          </View>
+          {ENABLE_GOOGLE_SIGNIN && mounted ? (
+            <Text style={styles.dim}>Google 備份功能尚未啟用</Text>
+          ) : (
+            <Text style={styles.dim}>目前僅支援備份到 Google 帳號。</Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="language" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.language")}</Text>
+          </View>
+          <View style={styles.pickerContainer}>
+            <Picker selectedValue={locale} onValueChange={(val) => setLocale(val as Locale)}>
+              <Picker.Item label={t("settings.language.zh")} value={"zh-TW"} />
+              <Picker.Item label={t("settings.language.en")} value={"en"} />
+            </Picker>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="track-changes" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.dailyLimit")}</Text>
+          </View>
+          <Text style={styles.settingLabel}>{t("settings.newLimit", { n: dailyNewLimit })}</Text>
           <Slider
             minimumValue={0}
             maximumValue={100}
@@ -332,7 +268,7 @@ export default function Settings() {
             onValueChange={setDailyNewLimit}
             onSlidingComplete={onCommitNewLimit}
           />
-          <Text>{t("settings.reviewLimit", { n: dailyReviewLimit })}</Text>
+          <Text style={[styles.settingLabel, { marginTop: 12 }]}>{t("settings.reviewLimit", { n: dailyReviewLimit })}</Text>
           <Slider
             minimumValue={0}
             maximumValue={1000}
@@ -343,8 +279,11 @@ export default function Settings() {
           />
         </View>
 
-        <Text style={styles.sectionTitle}>{t("settings.rate")}</Text>
-        <View style={{ marginBottom: 4 }}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="speed" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.rate")}</Text>
+          </View>
           <Slider
             minimumValue={0}
             maximumValue={100}
@@ -356,17 +295,31 @@ export default function Settings() {
           <Text style={styles.dim}>{t("settings.rate.hint", { n: ratePercent })}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>{t("settings.zhRate")}</Text>
-        <View style={styles.row}>
-          {[1, 1.15, 1.25, 1.35].map((m) => (
-            <View key={m} style={{ marginRight: 6 }}>
-              <Button title={`${zhRate === m ? "✓ " : ""}${m}x`} onPress={() => onSetZhRate(m)} />
-            </View>
-          ))}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="translate" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.zhRate")}</Text>
+          </View>
+          <View style={styles.row}>
+            {[1, 1.15, 1.25, 1.35].map((m) => (
+              <Pressable 
+                key={m}
+                style={[styles.speedButton, zhRate === m && styles.speedButtonActive]}
+                onPress={() => onSetZhRate(m)}
+              >
+                <Text style={[styles.speedButtonText, zhRate === m && styles.speedButtonTextActive]}>
+                  {zhRate === m ? "✓ " : ""}{m}x
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
-        <Text style={styles.sectionTitle}>{t("settings.pitch")}</Text>
-        <View style={{ marginBottom: 8 }}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="graphic-eq" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.pitch")}</Text>
+          </View>
           <Slider
             minimumValue={0}
             maximumValue={100}
@@ -378,9 +331,12 @@ export default function Settings() {
           <Text style={styles.dim}>{t("settings.pitch.hint", { n: pitchPercent })}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>{t("settings.wordFont")}</Text>
-        <View style={{ marginBottom: 8 }}>
-          <Text>{t("settings.wordFont.value", { n: wordFontSize })}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="text-fields" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.wordFont")}</Text>
+          </View>
+          <Text style={styles.settingLabel}>{t("settings.wordFont.value", { n: wordFontSize })}</Text>
           <Slider
             minimumValue={12}
             maximumValue={48}
@@ -391,81 +347,76 @@ export default function Settings() {
           />
         </View>
 
-        <Text style={styles.sectionTitle}>{t("settings.enVoices")}</Text>
-        {loadingVoices ? (
-          <Text style={styles.dim}>{t("settings.loadingVoices")}</Text>
-        ) : (
-          <View style={styles.voiceList}>
-            <View style={{ flex: 1 }}>
-              <Picker
-                selectedValue={voiceEn ?? ""}
-                onValueChange={(val) => onPickVoice("en", val === "" ? null : String(val))}
-              >
-                <Picker.Item label={t("settings.systemDefault")} value="" />
-                {enVoices.map((v) => (
-                  <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
-                ))}
-              </Picker>
-            </View>
-            <View style={styles.voiceRow}>
-              <Text style={styles.voiceName} numberOfLines={1}>
-                {currentEnName}
-              </Text>
-              <Pressable
-                onPress={() => onPreviewVoice("en")}
-                accessibilityLabel={t("settings.previewEn")}
-                style={{ paddingHorizontal: 6 }}
-              >
-                <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
-              </Pressable>
-            </View>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="record-voice-over" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.enVoices")}</Text>
           </View>
-        )}
-
-        <Text style={styles.sectionTitle}>{t("settings.zhVoices")}</Text>
-        {loadingVoices ? (
-          <Text style={styles.dim}>{t("settings.loadingVoices")}</Text>
-        ) : (
-          <View style={styles.voiceList}>
-            <View style={{ flex: 1 }}>
-              <Picker
-                selectedValue={voiceZh ?? ""}
-                onValueChange={(val) => onPickVoice("zh", val === "" ? null : String(val))}
-              >
-                <Picker.Item label={t("settings.systemDefault")} value="" />
-                {zhVoices.map((v) => (
-                  <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
-                ))}
-              </Picker>
+          {loadingVoices ? (
+            <Text style={styles.dim}>{t("settings.loadingVoices")}</Text>
+          ) : (
+            <View style={styles.voiceList}>
+              <View style={{ flex: 1, borderWidth: 2, borderColor: "#ddd", borderRadius: 10, overflow: "hidden" }}>
+                <Picker
+                  selectedValue={voiceEn ?? ""}
+                  onValueChange={(val) => onPickVoice("en", val === "" ? null : String(val))}
+                >
+                  <Picker.Item label={t("settings.systemDefault")} value="" />
+                  {enVoices.map((v) => (
+                    <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
+                  ))}
+                </Picker>
+              </View>
+              <View style={styles.voiceRow}>
+                <Text style={styles.voiceName} numberOfLines={1}>
+                  {currentEnName}
+                </Text>
+                <Pressable
+                  onPress={() => onPreviewVoice("en")}
+                  accessibilityLabel={t("settings.previewEn")}
+                  style={{ paddingHorizontal: 8 }}
+                >
+                  <MaterialIcons name="play-circle-outline" size={28} color="#0a7ea4" />
+                </Pressable>
+              </View>
             </View>
-            <View style={styles.voiceRow}>
-              <Text style={styles.voiceName} numberOfLines={1}>
-                {currentZhName}
-              </Text>
-              <Pressable
-                onPress={() => onPreviewVoice("zh")}
-                accessibilityLabel={t("settings.previewZh")}
-                style={{ paddingHorizontal: 6 }}
-              >
-                <MaterialIcons name="play-circle-outline" size={28} color="#1976d2" />
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        <View style={{ marginTop: 12 }}>
-          <Button title={t("settings.previewEn")} onPress={() => onPreviewVoice("en")} />
+          )}
         </View>
 
-        <View style={{ marginTop: 12 }}>
-          <Text style={styles.dim}>ExpoGo: {String(isExpoGo)}</Text>
-          <Text style={styles.dim}>redirectUri: {redirectUri}</Text>
-          <Text style={styles.dim}>
-            owner/slug: {String(Constants.expoConfig?.owner)}/{String(Constants.expoConfig?.slug)}
-          </Text>
-          <Text style={styles.dim}>webClientId: {String(dbgWebClientId)}</Text>
-          <Text style={styles.dim}>expoClientId: {String(dbgExpoClientId)}</Text>
-          <Text style={styles.dim}>androidClientId: {String(dbgAndroidClientId)}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="language" size={20} color="#0a7ea4" />
+            <Text style={styles.sectionTitle}>{t("settings.zhVoices")}</Text>
+          </View>
+          {loadingVoices ? (
+            <Text style={styles.dim}>{t("settings.loadingVoices")}</Text>
+          ) : (
+            <View style={styles.voiceList}>
+              <View style={{ flex: 1, borderWidth: 2, borderColor: "#ddd", borderRadius: 10, overflow: "hidden" }}>
+                <Picker
+                  selectedValue={voiceZh ?? ""}
+                  onValueChange={(val) => onPickVoice("zh", val === "" ? null : String(val))}
+                >
+                  <Picker.Item label={t("settings.systemDefault")} value="" />
+                  {zhVoices.map((v) => (
+                    <Picker.Item key={v.identifier} label={v.name || v.identifier} value={v.identifier} />
+                  ))}
+                </Picker>
+              </View>
+              <View style={styles.voiceRow}>
+                <Text style={styles.voiceName} numberOfLines={1}>
+                  {currentZhName}
+                </Text>
+                <Pressable
+                  onPress={() => onPreviewVoice("zh")}
+                  accessibilityLabel={t("settings.previewZh")}
+                  style={{ paddingHorizontal: 8 }}
+                >
+                  <MaterialIcons name="play-circle-outline" size={28} color="#0a7ea4" />
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -473,13 +424,23 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: "bold", marginTop: 12, marginBottom: 8 },
-  row: { flexDirection: "row", gap: 10 },
-  voiceList: { marginBottom: 8 },
-  voiceRow: { flexDirection: "row", alignItems: "center" },
-  voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: "#333" },
-  dim: { color: "#666" },
+  container: { flex: 1, backgroundColor: "#f5f7fa", paddingTop: 16 },
+  header: { paddingHorizontal: 16, marginBottom: 20 },
+  title: { fontSize: 32, fontWeight: "700", color: "#1a1a1a" },
+  section: { marginHorizontal: 16, marginBottom: 16, backgroundColor: "#fff", borderRadius: 14, padding: 16, borderWidth: 2, borderColor: "#ddd" },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1a1a1a", flex: 1 },
+  settingLabel: { fontSize: 14, fontWeight: "600", color: "#1a1a1a", marginBottom: 8 },
+  actionButton: { flex: 1, minWidth: 100, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#e8f4f8", borderRadius: 10, alignItems: "center", borderWidth: 2, borderColor: "#0a7ea4" },
+  actionButtonText: { color: "#0a7ea4", fontSize: 13, fontWeight: "600" },
+  row: { flexDirection: "row", gap: 8 },
+  speedButton: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#f0f0f0", borderRadius: 10, alignItems: "center", borderWidth: 2, borderColor: "#ddd" },
+  speedButtonActive: { backgroundColor: "#0a7ea4", borderColor: "#0a7ea4" },
+  speedButtonText: { color: "#1a1a1a", fontSize: 13, fontWeight: "600" },
+  speedButtonTextActive: { color: "#fff" },
+  voiceList: { marginBottom: 12, gap: 8 },
+  voiceRow: { flexDirection: "row", alignItems: "center", marginTop: 8, padding: 8, backgroundColor: "#f9fafb", borderRadius: 10 },
+  voiceName: { maxWidth: 180, flexShrink: 1, marginRight: 6, color: "#1a1a1a", fontWeight: "500", fontSize: 13 },
+  dim: { color: "#999", fontSize: 13, marginTop: 4 },
+  pickerContainer: { borderWidth: 2, borderColor: "#ddd", borderRadius: 10, overflow: "hidden", backgroundColor: "#f9fafb" },
 });
-

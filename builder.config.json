@@ -1,0 +1,6 @@
+{
+  "command": "npm run start",
+  "serverUrl": "http://localhost:8081/exam/word",
+  "authenticateProxy": false,
+  "commitMode": "commits"
+}

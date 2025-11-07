@@ -885,22 +885,36 @@ export default function ReadingScreen() {
           />
         </View>
         <View style={styles.actionRow}>
-          <Button title={t('reading.toolbar.pickFile')} onPress={onPickFile} />
-          <View style={{ width: 8 }} />
-          <Button
-            title={ocrLoading ? t('reading.ocr.loading') : t('reading.toolbar.pickImage')}
+          <Pressable
+            style={styles.actionButton}
+            onPress={onPickFile}
+          >
+            <Text style={styles.actionButtonText}>📄 {t('reading.toolbar.pickFile')}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, ocrLoading && styles.actionButtonDisabled]}
             onPress={onPickImage}
             disabled={ocrLoading}
-          />
-          <View style={{ width: 8 }} />
-          <Button title={t('reading.toolbar.clear')} onPress={onClearArticle} disabled={!rawText && !fileName} />
-          <View style={{ width: 8 }} />
-          <Button
-            title={articleSaving ? t('reading.saveArticle.saving') : t('reading.saveArticle.button')}
-            onPress={handleSaveArticle}
-            disabled={articleSaving || !rawText.trim()}
-          />
+          >
+            <Text style={styles.actionButtonText}>{ocrLoading ? '⏳' : '🖼️'} {ocrLoading ? t('reading.ocr.loading') : t('reading.toolbar.pickImage')}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, (!rawText && !fileName) && styles.actionButtonDisabled]}
+            onPress={onClearArticle}
+            disabled={!rawText && !fileName}
+          >
+            <Text style={styles.actionButtonText}>🗑️ {t('reading.toolbar.clear')}</Text>
+          </Pressable>
         </View>
+        <Pressable
+          style={[styles.savePrimaryButton, (articleSaving || !rawText.trim()) && styles.savePrimaryButtonDisabled]}
+          onPress={handleSaveArticle}
+          disabled={articleSaving || !rawText.trim()}
+        >
+          <Text style={styles.savePrimaryButtonText}>
+            {articleSaving ? '💾 ' + t('reading.saveArticle.saving') : '💾 ' + t('reading.saveArticle.button')}
+          </Text>
+        </Pressable>
         {articleNotice ? (
           <View
             style={[
@@ -937,7 +951,12 @@ export default function ReadingScreen() {
               onSubmitEditing={onAddNewTag}
               returnKeyType="done"
             />
-            <Button title={t('reading.tags.addButton')} onPress={onAddNewTag} />
+            <Pressable
+              style={styles.tagAddButton}
+              onPress={onAddNewTag}
+            >
+              <Text style={styles.tagAddButtonText}>➕</Text>
+            </Pressable>
           </View>
           {tagDraftError ? <Text style={styles.newTagError}>{tagDraftError}</Text> : null}
           <View style={styles.tagList}>
@@ -957,7 +976,11 @@ export default function ReadingScreen() {
         </View>
 
         {tokens.length === 0 && rawText.trim() === '' && (
-          <Text style={styles.placeholder}>{t('reading.placeholder.hint')}</Text>
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>📖</Text>
+            <Text style={styles.emptyStateTitle}>{t('reading.placeholder.hint')}</Text>
+            <Text style={styles.emptyStateSubtitle}>上傳文件或貼上文章內容，然後點選單字查詢</Text>
+          </View>
         )}
         {tokens.length > 0 && (
           <View style={styles.articleSection}>
@@ -1009,13 +1032,34 @@ export default function ReadingScreen() {
 
       {/* Toolbar */}
       <View style={styles.toolbar}>
-        <Button title={t('reading.controls.start')} onPress={onStartReading} disabled={isReading && !isPaused} />
-        <View style={{ width: 8 }} />
-        <Button title={t('reading.controls.pause')} onPress={onPauseReading} disabled={!isReading || isPaused} />
-        <View style={{ width: 8 }} />
-        <Button title={t('reading.controls.resume')} onPress={onResumeReading} disabled={!isReading || !isPaused} />
-        <View style={{ width: 8 }} />
-        <Button title={t('reading.controls.stop')} onPress={onStopReading} disabled={!isReading} />
+        <Pressable
+          style={[styles.toolbarButton, (isReading && !isPaused) && styles.toolbarButtonDisabled]}
+          onPress={onStartReading}
+          disabled={isReading && !isPaused}
+        >
+          <Text style={styles.toolbarButtonText}>▶️ {t('reading.controls.start')}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.toolbarButton, (!isReading || isPaused) && styles.toolbarButtonDisabled]}
+          onPress={onPauseReading}
+          disabled={!isReading || isPaused}
+        >
+          <Text style={styles.toolbarButtonText}>⏸️ {t('reading.controls.pause')}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.toolbarButton, (!isReading || !isPaused) && styles.toolbarButtonDisabled]}
+          onPress={onResumeReading}
+          disabled={!isReading || !isPaused}
+        >
+          <Text style={styles.toolbarButtonText}>▶️ {t('reading.controls.resume')}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.toolbarButton, !isReading && styles.toolbarButtonDisabled]}
+          onPress={onStopReading}
+          disabled={!isReading}
+        >
+          <Text style={styles.toolbarButtonText}>⏹️ {t('reading.controls.stop')}</Text>
+        </Pressable>
       </View>
 
       {/* Modal */}
@@ -1049,9 +1093,19 @@ export default function ReadingScreen() {
               )}
             </ScrollView>
             <View style={styles.modalButtonsRow}>
-              <Button title={t('reading.modal.addWord')} onPress={handleAddWord} disabled={lookupState?.loading} />
-              <View style={{ width: 8 }} />
-              <Button title={t('reading.modal.speak')} onPress={() => speak(selectedWord)} />
+              <Pressable
+                style={[styles.modalPrimaryButton, lookupState?.loading && styles.modalButtonDisabled]}
+                onPress={handleAddWord}
+                disabled={lookupState?.loading}
+              >
+                <Text style={styles.modalPrimaryButtonText}>➕ {t('reading.modal.addWord')}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalSecondaryButton}
+                onPress={() => speak(selectedWord)}
+              >
+                <Text style={styles.modalSecondaryButtonText}>🔊 {t('reading.modal.speak')}</Text>
+              </Pressable>
             </View>
             {feedback ? (
               <Text
@@ -1065,7 +1119,12 @@ export default function ReadingScreen() {
               </Text>
             ) : null}
             <View style={styles.modalActions}>
-              <Button title={t('reading.modal.close')} onPress={() => setSelectedKey(null)} />
+              <Pressable
+                style={styles.modalCloseButton}
+                onPress={() => setSelectedKey(null)}
+              >
+                <Text style={styles.modalCloseButtonText}>{t('reading.modal.close')}</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -1075,61 +1134,83 @@ export default function ReadingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  textInput: { minHeight: 160, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, margin: 16, backgroundColor: '#fff', textAlignVertical: 'top' },
-  fileName: { marginHorizontal: 16, marginTop: 12, color: '#666' },
-  metaSection: { marginHorizontal: 16, marginTop: 12, gap: 6 },
-  metaLabel: { fontSize: 14, fontWeight: '600', color: '#333' },
-  metaInput: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
-  actionRow: { marginHorizontal: 16, marginTop: 12, marginBottom: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  placeholder: { marginTop: 12, color: '#888', marginHorizontal: 16 },
-  articleSection: { marginTop: 20, gap: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginHorizontal: 16 },
-  articleBox: { marginTop: 8, marginHorizontal: 16, padding: 14, borderWidth: 1, borderColor: '#d0d7e2', borderRadius: 10, backgroundColor: '#f7f9fc' },
-  articleText: { fontSize: 18, lineHeight: 28, color: '#222' },
-  word: { color: '#0d47a1' },
-  wordZh: { color: '#2e7d32' },
-  wordActive: { backgroundColor: '#ffecb3', borderRadius: 4 },
-  nonWord: { color: '#222' },
-  toolbar: { padding: 16, borderTopWidth: 1, borderColor: '#e0e0e0', flexDirection: 'row', gap: 12 },
-  articleNotice: { marginHorizontal: 16, marginTop: 8, padding: 12, borderRadius: 8, borderWidth: 1 },
-  articleNoticeSuccess: { backgroundColor: '#e8f5e9', borderColor: '#81c784' },
-  articleNoticeError: { backgroundColor: '#ffebee', borderColor: '#ef9a9a' },
-  articleNoticeText: { fontSize: 14, color: '#333' },
+  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  textInput: { minHeight: 160, borderWidth: 2, borderColor: '#ddd', borderRadius: 12, padding: 14, margin: 16, backgroundColor: '#fff', textAlignVertical: 'top', fontSize: 16, color: '#1a1a1a' },
+  fileName: { marginHorizontal: 16, marginTop: 12, color: '#666', fontSize: 13 },
+  metaSection: { marginHorizontal: 16, marginTop: 16, gap: 8 },
+  metaLabel: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  metaInput: { borderWidth: 2, borderColor: '#ddd', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#fff', fontSize: 16, color: '#1a1a1a' },
+  actionRow: { marginHorizontal: 16, marginTop: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  actionButton: { flex: 1, minWidth: 100, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#e8f4f8', borderRadius: 10, alignItems: 'center', borderWidth: 2, borderColor: '#0a7ea4' },
+  actionButtonDisabled: { opacity: 0.5 },
+  actionButtonText: { color: '#0a7ea4', fontSize: 13, fontWeight: '600' },
+  savePrimaryButton: { marginHorizontal: 16, marginBottom: 12, paddingVertical: 14, backgroundColor: '#4CAF50', borderRadius: 12, alignItems: 'center', elevation: 2 },
+  savePrimaryButtonDisabled: { opacity: 0.6 },
+  savePrimaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  placeholder: { marginTop: 20, color: '#999', marginHorizontal: 16, fontSize: 15 },
+  emptyStateContainer: { marginTop: 40, alignItems: 'center', paddingHorizontal: 24 },
+  emptyStateIcon: { fontSize: 60, marginBottom: 16 },
+  emptyStateTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', textAlign: 'center', marginBottom: 8 },
+  emptyStateSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20 },
+  articleSection: { marginTop: 24, gap: 12, marginHorizontal: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  articleBox: { marginTop: 8, padding: 16, borderWidth: 2, borderColor: '#ddd', borderRadius: 14, backgroundColor: '#fff' },
+  articleText: { fontSize: 18, lineHeight: 28, color: '#1a1a1a' },
+  word: { color: '#0a7ea4', fontWeight: '600' },
+  wordZh: { color: '#4CAF50', fontWeight: '600' },
+  wordActive: { backgroundColor: '#ffecb3', borderRadius: 6, paddingHorizontal: 2 },
+  nonWord: { color: '#1a1a1a' },
+  toolbar: { paddingHorizontal: 12, paddingVertical: 16, borderTopWidth: 1, borderColor: '#e0e0e0', flexDirection: 'row', gap: 10, backgroundColor: '#fff', justifyContent: 'space-around' },
+  toolbarButton: { flex: 1, paddingVertical: 12, backgroundColor: '#0a7ea4', borderRadius: 10, alignItems: 'center' },
+  toolbarButtonDisabled: { opacity: 0.5 },
+  toolbarButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  articleNotice: { marginHorizontal: 16, marginTop: 12, padding: 12, borderRadius: 10, borderLeftWidth: 4 },
+  articleNoticeSuccess: { backgroundColor: '#e8f5e9', borderColor: '#4CAF50', borderLeftColor: '#4CAF50' },
+  articleNoticeError: { backgroundColor: '#ffebee', borderColor: '#e74c3c', borderLeftColor: '#e74c3c' },
+  articleNoticeText: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
   // tags
-  tagSection: { marginHorizontal: 16, marginTop: 8, borderWidth: 1, borderColor: '#d0d7e2', borderRadius: 10, backgroundColor: '#f2f6ff' },
-  tagHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },
-  tagHeaderText: { fontSize: 14, fontWeight: '600', color: '#333' },
-  tagHeaderValue: { fontSize: 13, color: '#555', flexShrink: 1, textAlign: 'right', marginLeft: 8 },
-  newTagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingBottom: 10 },
-  newTagInput: { flex: 1, borderWidth: 1, borderColor: '#c5d1e5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#fff' },
-  newTagInputError: { borderColor: '#ef5350' },
-  newTagError: { color: '#c62828', fontSize: 12, paddingHorizontal: 14, paddingBottom: 6 },
-  tagList: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, paddingBottom: 10 },
-  tagChip: { paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#c5d1e5', borderRadius: 14, marginRight: 8, marginTop: 6, backgroundColor: '#fff' },
-  tagChipSelected: { backgroundColor: '#e3f2fd', borderColor: '#64b5f6' },
-  tagChipText: { fontSize: 13, color: '#333' },
-  tagChipTextSelected: { color: '#0d47a1' },
-  tagChipTextDisabled: { color: '#777' },
-  tagHint: { fontSize: 12, color: '#666', paddingHorizontal: 14, paddingBottom: 10 },
+  tagSection: { marginHorizontal: 16, marginTop: 16, borderWidth: 2, borderColor: '#ddd', borderRadius: 12, backgroundColor: '#fff', paddingVertical: 12 },
+  tagHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
+  tagHeaderText: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
+  tagHeaderValue: { fontSize: 13, color: '#666', flexShrink: 1, textAlign: 'right', marginLeft: 8 },
+  newTagRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12 },
+  newTagInput: { flex: 1, borderWidth: 2, borderColor: '#ddd', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#f9fafb', fontSize: 14, color: '#1a1a1a' },
+  newTagInputError: { borderColor: '#e74c3c' },
+  newTagError: { color: '#e74c3c', fontSize: 12, paddingHorizontal: 16, paddingBottom: 6, fontWeight: '500' },
+  tagAddButton: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#4CAF50', borderRadius: 10, alignItems: 'center' },
+  tagAddButtonText: { fontSize: 18 },
+  tagList: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, paddingBottom: 12 },
+  tagChip: { paddingHorizontal: 12, paddingVertical: 8, borderWidth: 2, borderColor: '#ddd', borderRadius: 16, marginRight: 10, marginTop: 8, backgroundColor: '#f9fafb' },
+  tagChipSelected: { backgroundColor: '#e3f2fd', borderColor: '#0a7ea4' },
+  tagChipText: { fontSize: 13, color: '#1a1a1a', fontWeight: '500' },
+  tagChipTextSelected: { color: '#0a7ea4', fontWeight: '600' },
+  tagChipTextDisabled: { color: '#999' },
+  tagHint: { fontSize: 12, color: '#999', paddingHorizontal: 16, paddingBottom: 8 },
   // modal
   modalContainer: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalCard: { backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 16, borderTopRightRadius: 16, gap: 12, maxHeight: '70%' },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#222' },
-  modalPhonetic: { fontSize: 16, color: '#555' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalCard: { backgroundColor: '#fff', padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 16, maxHeight: '75%' },
+  modalTitle: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
+  modalPhonetic: { fontSize: 16, color: '#666', fontWeight: '500' },
   modalScroll: { maxHeight: 260 },
   modalContent: { paddingBottom: 12, gap: 16 },
-  modalSection: { gap: 6 },
-  modalLabel: { fontSize: 14, fontWeight: '600', color: '#333' },
-  modalText: { fontSize: 15, color: '#222' },
-  modalSub: { fontSize: 14, color: '#555', marginTop: 2 },
-  modalHint: { fontSize: 14, color: '#555' },
-  modalError: { fontSize: 14, color: '#c62828' },
-  modalButtonsRow: { flexDirection: 'row', justifyContent: 'flex-start', gap: 12 },
-  modalFeedback: { marginTop: 6, fontSize: 14, textAlign: 'left' },
-  modalFeedbackSuccess: { color: '#2e7d32' },
-  modalFeedbackInfo: { color: '#0277bd' },
-  modalFeedbackError: { color: '#c62828' },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  modalSection: { gap: 8 },
+  modalLabel: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  modalText: { fontSize: 15, color: '#1a1a1a', lineHeight: 22 },
+  modalSub: { fontSize: 14, color: '#666', marginTop: 4 },
+  modalHint: { fontSize: 14, color: '#666' },
+  modalError: { fontSize: 14, color: '#e74c3c' },
+  modalButtonsRow: { flexDirection: 'row', justifyContent: 'flex-start', gap: 12, marginTop: 4 },
+  modalPrimaryButton: { flex: 1, paddingVertical: 12, backgroundColor: '#4CAF50', borderRadius: 10, alignItems: 'center' },
+  modalPrimaryButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  modalSecondaryButton: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#f0f0f0', borderRadius: 10, alignItems: 'center', borderWidth: 2, borderColor: '#ddd' },
+  modalSecondaryButtonText: { color: '#666', fontSize: 14, fontWeight: '600' },
+  modalButtonDisabled: { opacity: 0.6 },
+  modalFeedback: { marginTop: 8, fontSize: 14, textAlign: 'center', fontWeight: '600' },
+  modalFeedbackSuccess: { color: '#4CAF50' },
+  modalFeedbackInfo: { color: '#0a7ea4' },
+  modalFeedbackError: { color: '#e74c3c' },
+  modalCloseButton: { paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#f0f0f0', borderRadius: 10, alignItems: 'center', borderWidth: 2, borderColor: '#ddd' },
+  modalCloseButtonText: { color: '#666', fontSize: 14, fontWeight: '700' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
 });

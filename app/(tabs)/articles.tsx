@@ -13,6 +13,7 @@ import {
   Platform,
   type GestureResponderEvent,
 } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { useI18n } from '@/i18n';
 import {
@@ -169,11 +170,16 @@ export default function ArticleLibraryScreen() {
     <View style={styles.container}>
       {banner ? (
         <View style={[styles.banner, banner.kind === 'success' ? styles.bannerSuccess : styles.bannerError]}>
-          <Text style={styles.bannerText}>{banner.text}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, marginRight: 8 }}>{banner.kind === 'success' ? '✅' : '❌'}</Text>
+            <Text style={styles.bannerText}>{banner.text}</Text>
+          </View>
         </View>
       ) : null}
+      <View style={styles.header}>
+        <Text style={styles.title}>📚 {t('articles.filter.tagPrefix')} 我的收藏</Text>
+      </View>
       <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>{t('articles.filter.tagPrefix')}</Text>
         <View style={styles.filterChips}>
           <Pressable
             key="__all__"
@@ -203,7 +209,9 @@ export default function ArticleLibraryScreen() {
         contentContainerStyle={filteredArticles.length === 0 ? styles.emptyContainer : styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{t('articles.empty')}</Text>
+            <Text style={styles.emptyIcon}>📖</Text>
+            <Text style={styles.emptyText}>暫無收藏</Text>
+            <Text style={styles.emptySubtext}>{t('articles.empty')}</Text>
           </View>
         }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -234,52 +242,60 @@ function buildSnippet(article: Article): string {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fb' },
+  container: { flex: 1, backgroundColor: '#f5f7fa' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 16, gap: 12 },
-  filterContainer: { paddingHorizontal: 16, paddingTop: 16 },
-  filterLabel: { fontSize: 14, color: '#555', marginBottom: 8 },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  title: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
+  listContent: { padding: 16, gap: 12, paddingBottom: 20 },
+  filterContainer: { paddingHorizontal: 16, paddingBottom: 12 },
   filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#c5d1e5',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#ddd',
     backgroundColor: '#fff',
   },
-  filterChipActive: { backgroundColor: '#1e88e5', borderColor: '#1e88e5' },
-  filterChipText: { fontSize: 13, color: '#1a237e' },
-  filterChipTextActive: { color: '#fff' },
+  filterChipActive: { backgroundColor: '#0a7ea4', borderColor: '#0a7ea4' },
+  filterChipText: { fontSize: 13, color: '#1a1a1a', fontWeight: '500' },
+  filterChipTextActive: { color: '#fff', fontWeight: '600' },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#e0e6f0',
-    gap: 8,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    gap: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
-  cardPressed: { backgroundColor: '#eef3ff', transform: [{ scale: 0.99 }] },
+  cardPressed: { backgroundColor: '#f0f6fb', transform: [{ scale: 0.99 }] },
   cardWeb: { cursor: 'pointer' as const },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  cardTitle: { fontSize: 18, fontWeight: '600', color: '#1a237e', flexShrink: 1 },
-  cardDate: { fontSize: 12, color: '#78909c' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', flexShrink: 1 },
+  cardDate: { fontSize: 12, color: '#999', fontWeight: '500' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tagPill: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     backgroundColor: '#e3f2fd',
   },
-  tagPillText: { fontSize: 12, color: '#0d47a1' },
-  cardSnippet: { fontSize: 14, color: '#37474f', lineHeight: 20 },
-  cardDelete: { alignSelf: 'flex-end', paddingVertical: 4, paddingHorizontal: 8 },
-  cardDeleteText: { fontSize: 13, color: '#d32f2f' },
+  tagPillText: { fontSize: 12, color: '#0a7ea4', fontWeight: '600' },
+  cardSnippet: { fontSize: 14, color: '#666', lineHeight: 21 },
+  cardDelete: { alignSelf: 'flex-end', paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#ffebee', borderRadius: 8 },
+  cardDeleteText: { fontSize: 13, color: '#e74c3c', fontWeight: '600' },
   emptyContainer: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyState: { alignItems: 'center', gap: 8 },
-  emptyText: { fontSize: 16, color: '#607d8b', textAlign: 'center' },
-  banner: { marginHorizontal: 16, marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1 },
-  bannerSuccess: { backgroundColor: '#e8f5e9', borderColor: '#66bb6a' },
-  bannerError: { backgroundColor: '#ffebee', borderColor: '#ef5350' },
-  bannerText: { fontSize: 14, color: '#263238' },
+  emptyState: { alignItems: 'center', gap: 16 },
+  emptyIcon: { fontSize: 64 },
+  emptyText: { fontSize: 18, color: '#1a1a1a', textAlign: 'center', fontWeight: '600' },
+  emptySubtext: { fontSize: 14, color: '#999', textAlign: 'center' },
+  banner: { marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 10, borderLeftWidth: 4, gap: 8 },
+  bannerSuccess: { backgroundColor: '#e8f5e9', borderColor: '#4CAF50', borderLeftColor: '#4CAF50' },
+  bannerError: { backgroundColor: '#ffebee', borderColor: '#e74c3c', borderLeftColor: '#e74c3c' },
+  bannerText: { fontSize: 14, color: '#1a1a1a', fontWeight: '600' },
 });

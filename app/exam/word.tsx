@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Button, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, Keyboard, ScrollView, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 import * as Speech from 'expo-speech';
 import { EXAM_TAG, Word, loadWords, toggleWordTag } from '@/utils/storage';
 import { getSpeechOptions } from '@/utils/tts';
@@ -152,10 +152,15 @@ export default function WordExam() {
   if (candidates.length === 0) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.title}>{t('exam.word.empty.title')}</Text>
-        <Text style={styles.hint}>{t('exam.word.empty.hint', { tag: EXAM_TAG })}</Text>
-        <View style={{ height: 12 }} />
-        <Button title={t('common.back')} onPress={() => router.back()} />
+        <View style={styles.emptyIllustration}>
+          <Text style={styles.emptyIcon}>📚</Text>
+        </View>
+        <Text style={styles.emptyTitle}>{t('exam.word.empty.title')}</Text>
+        <Text style={styles.emptyHint}>{t('exam.word.empty.hint', { tag: EXAM_TAG })}</Text>
+        <View style={{ height: 24 }} />
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>{t('common.back')}</Text>
+        </Pressable>
       </View>
     );
   }
@@ -170,10 +175,10 @@ export default function WordExam() {
           </Text>
           <View style={styles.zhRow}>
             <Text style={styles.zh}>{(current.zh || '').trim() || t('exam.word.noChinese')}</Text>
-            <View style={{ width: 8 }} />
-            <Button title={t('exam.word.speak')} onPress={speakWord} />
+            <Pressable style={styles.speakButton} onPress={speakWord}>
+              <Text style={styles.speakButtonText}>🔊 {t('exam.word.speak')}</Text>
+            </Pressable>
           </View>
-          <View style={{ height: 12 }} />
           <TextInput
             ref={inputRef}
             value={input}
@@ -184,12 +189,19 @@ export default function WordExam() {
             placeholder={t('exam.word.input.placeholder')}
             style={styles.input}
           />
-          <View style={{ height: 8 }} />
-          <Button title={t('common.submit')} onPress={onSubmit} />
-          <View style={{ height: 8 }} />
-          <Button title={t('exam.word.hint')} onPress={() => setShowHint(true)} />
-          <View style={{ height: 8 }} />
-          <Button title={t('exam.word.removeTag')} onPress={onRemoveExamTag} />
+          <View style={styles.buttonRow}>
+            <Pressable style={styles.primaryButton} onPress={onSubmit}>
+              <Text style={styles.primaryButtonText}>{t('common.submit')}</Text>
+            </Pressable>
+          </View>
+          <View style={styles.secondaryButtonRow}>
+            <Pressable style={styles.secondaryButton} onPress={() => setShowHint(true)}>
+              <Text style={styles.secondaryButtonText}>💡 {t('exam.word.hint')}</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButton} onPress={onRemoveExamTag}>
+              <Text style={styles.secondaryButtonText}>✕ {t('exam.word.removeTag')}</Text>
+            </Pressable>
+          </View>
 
           {showHint && (
             <View style={styles.hintContainer}>
@@ -206,15 +218,18 @@ export default function WordExam() {
           {showWrong && (
             <View style={styles.wrongOverlay}>
               <View style={styles.wrongCard}>
+                <Text style={styles.wrongCardEmoji}>❌</Text>
                 <Text style={styles.wrongText}>{t('exam.word.wrong')}</Text>
-                <View style={{ height: 16 }} />
-                <Button
-                  title={t('common.ok')}
+                <Text style={styles.wrongCardHint}>請重新檢查拼寫</Text>
+                <Pressable
+                  style={styles.wrongCardButton}
                   onPress={() => {
                     setShowWrong(false);
                     inputRef.current?.focus();
                   }}
-                />
+                >
+                  <Text style={styles.wrongCardButtonText}>{t('common.ok')}</Text>
+                </Pressable>
               </View>
             </View>
           )}
@@ -225,22 +240,40 @@ export default function WordExam() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 24, paddingBottom: 64, backgroundColor: '#fff', flexGrow: 1 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  progress: { marginTop: 6, color: '#555' },
-  zhRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center' },
-  zh: { fontSize: 20 },
-  input: { marginTop: 12, alignSelf: 'stretch', borderWidth: 1, borderColor: '#bbb', borderRadius: 8, padding: 12, fontSize: 18, backgroundColor: '#f9fafb' },
-  hintContainer: { marginTop: 12 },
-  hintLine: { fontSize: 20, fontWeight: '600' },
-  hintLetter: { color: '#000' },
-  hintStar: { color: '#c62828', fontSize: 20, fontWeight: '700' },
-  correctOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#a5d6a7', alignItems: 'center', justifyContent: 'center' },
-  correctText: { color: '#1b5e20', fontSize: 28, fontWeight: 'bold' },
-  hint: { color: '#666', marginTop: 6, textAlign: 'center' },
-  wrongOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  wrongCard: { backgroundColor: '#fff', paddingVertical: 24, paddingHorizontal: 32, borderRadius: 16, alignItems: 'center', width: '80%', maxWidth: 320, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6 },
-  wrongText: { fontSize: 22, fontWeight: '700', color: '#c62828' },
+  screen: { flex: 1, backgroundColor: '#f5f7fa' },
+  content: { padding: 20, paddingBottom: 64, backgroundColor: '#f5f7fa', flexGrow: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#f5f7fa' },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
+  progress: { marginTop: 8, color: '#666', fontSize: 14, fontWeight: '500' },
+  zhRow: { marginTop: 16, flexDirection: 'row', alignItems: 'center' },
+  zh: { fontSize: 22, fontWeight: '600', color: '#1a1a1a', flex: 1 },
+  input: { marginTop: 16, alignSelf: 'stretch', borderWidth: 2, borderColor: '#ddd', borderRadius: 12, padding: 16, fontSize: 18, backgroundColor: '#fff', color: '#1a1a1a' },
+  hintContainer: { marginTop: 16, padding: 16, backgroundColor: '#fff3cd', borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#ffc107' },
+  hintLine: { fontSize: 20, fontWeight: '600', color: '#1a1a1a' },
+  hintLetter: { color: '#1a1a1a' },
+  hintStar: { color: '#e74c3c', fontSize: 20, fontWeight: '700' },
+  correctOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#d4edda', alignItems: 'center', justifyContent: 'center' },
+  correctText: { color: '#155724', fontSize: 32, fontWeight: 'bold' },
+  emptyIcon: { fontSize: 80, marginBottom: 16 },
+  emptyIllustration: { marginBottom: 16, alignItems: 'center' },
+  emptyTitle: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', marginBottom: 12, textAlign: 'center' },
+  emptyHint: { color: '#666', marginBottom: 8, textAlign: 'center', fontSize: 16, lineHeight: 24 },
+  hint: { color: '#666', marginTop: 8, textAlign: 'center', fontSize: 15 },
+  wrongOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  wrongCard: { backgroundColor: '#fff', paddingVertical: 28, paddingHorizontal: 36, borderRadius: 20, alignItems: 'center', width: '90%', maxWidth: 340, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  wrongText: { fontSize: 20, fontWeight: '700', color: '#e74c3c', marginBottom: 20 },
+  backButton: { paddingHorizontal: 32, paddingVertical: 14, backgroundColor: '#0a7ea4', borderRadius: 12, alignItems: 'center', minWidth: 120 },
+  backButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  speakButton: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#e8f4f8', borderRadius: 10, borderWidth: 2, borderColor: '#0a7ea4' },
+  speakButtonText: { color: '#0a7ea4', fontSize: 14, fontWeight: '600' },
+  buttonRow: { marginTop: 20, alignSelf: 'stretch' },
+  primaryButton: { paddingVertical: 16, backgroundColor: '#4CAF50', borderRadius: 12, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4 },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  secondaryButtonRow: { marginTop: 12, flexDirection: 'row', gap: 12 },
+  secondaryButton: { flex: 1, paddingVertical: 14, backgroundColor: '#f0f0f0', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ddd' },
+  secondaryButtonText: { color: '#555', fontSize: 14, fontWeight: '600' },
+  wrongCardEmoji: { fontSize: 48, marginBottom: 12 },
+  wrongCardHint: { fontSize: 14, color: '#999', marginTop: 8 },
+  wrongCardButton: { paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#0a7ea4', borderRadius: 10, marginTop: 16, minWidth: 100, alignItems: 'center' },
+  wrongCardButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

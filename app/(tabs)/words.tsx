@@ -7,6 +7,7 @@ import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWord
 import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
 import { useI18n } from "@/i18n";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 const SORT_PREF_KEY = "@word_sort_desc";
 
@@ -161,21 +162,33 @@ export default function Words() {
   };
 
   const renderItem = ({ item }: { item: Word }) => (
-    <View style={styles.item}>
+    <Pressable
+      style={styles.item}
+      onPress={() => onOpenDetail(item.en)}
+    >
       {/* Top: word + translation */}
-      <Pressable style={styles.topArea} onPress={() => onOpenDetail(item.en)}>
+      <View style={styles.topArea}>
         <Text style={[styles.itemEn, { fontSize: wordFont }]} numberOfLines={1} ellipsizeMode="tail">
           {item.en}
         </Text>
-        <Text style={styles.itemZh}>{item.zh}</Text>
-      </Pressable>
+        <Text style={styles.itemZh}>{item.zh || '—'}</Text>
+      </View>
 
       {/* Middle: tags */}
       {item.tags && item.tags.length > 0 && (
         <View style={styles.tagRow}>
           {item.tags!.map((tagName) => (
-            <Pressable key={tagName} onPress={() => router.push({ pathname: "/tags/[tag]", params: { tag: tagName } })} style={[styles.tagPill, tagName === REVIEW_TAG && styles.tagPillReview]}>
-              <Text style={[styles.tagPillText, tagName === REVIEW_TAG && styles.tagPillTextReview]}>{tagName}</Text>
+            <Pressable
+              key={tagName}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push({ pathname: "/tags/[tag]", params: { tag: tagName } });
+              }}
+              style={[styles.tagPill, tagName === REVIEW_TAG && styles.tagPillReview]}
+            >
+              <Text style={[styles.tagPillText, tagName === REVIEW_TAG && styles.tagPillTextReview]}>
+                {tagName === REVIEW_TAG ? '🔄' : '🏷️'} {tagName}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -183,10 +196,21 @@ export default function Words() {
 
       {/* Bottom: date, review count, status, read, delete */}
       <View style={styles.bottomRow}>
-        <Text style={styles.metaLeft}>{formatYMD(item.createdAt)}</Text>
-        <Text style={[styles.metaLeft, styles.reviewCount]}>{item.reviewCount || 0}</Text>
-        <Pressable style={styles.statusBoxInline} onPress={() => setStatus(item.en, nextStatus(item.status))}>
-          <Text style={styles.tiny}>{t('words.familiarity')}</Text>
+        <View style={styles.metaGroup}>
+          <Text style={styles.metaIcon}>📅</Text>
+          <Text style={styles.metaText}>{formatYMD(item.createdAt)}</Text>
+        </View>
+        <View style={styles.metaGroup}>
+          <Text style={styles.metaIcon}>🔁</Text>
+          <Text style={styles.metaText}>{item.reviewCount || 0}</Text>
+        </View>
+        <Pressable
+          style={styles.statusButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            setStatus(item.en, nextStatus(item.status));
+          }}
+        >
           <View style={styles.pillRow}>
             <View style={[styles.dot, item.status === "unknown" && styles.dotRed]} />
             <View style={[styles.dot, item.status === "learning" && styles.dotYellow]} />
@@ -194,53 +218,113 @@ export default function Words() {
           </View>
         </Pressable>
         <View style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Button title={t('words.read')} onPress={() => onSpeak(item.en, item.en)} />
-          <Button title={t('words.delete')} color="#c62828" onPress={() => removeWord(item.en)} />
+          <Pressable
+            style={styles.actionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              onSpeak(item.en, item.en);
+            }}
+          >
+            <Text style={styles.actionButtonText}>🔊</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={(e) => {
+              e.stopPropagation();
+              removeWord(item.en);
+            }}
+          >
+            <Text style={styles.actionButtonText}>🗑️</Text>
+          </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('words.title')}</Text>
-      <TextInput
-        style={styles.searchInput}
-        placeholder={t('words.search.placeholder')}
-        value={search}
-        onChangeText={setSearch}
-        returnKeyType="search"
-      />
-      <View style={styles.sortRow}>
-        <Button title={sortDesc ? t('words.sort.new2old') : t('words.sort.old2new')} onPress={() => setSortDesc((v) => !v)} />
+      <View style={styles.header}>
+        <Text style={styles.title}>📚 {t('words.title')}</Text>
       </View>
-      <FlatList data={data} keyExtractor={(item, idx) => item.en + idx} renderItem={renderItem} ItemSeparatorComponent={() => <View style={{ height: 10 }} />} />
+
+      <View style={styles.searchContainer}>
+        <MaterialIcons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder={t('words.search.placeholder')}
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+          placeholderTextColor="#999"
+        />
+      </View>
+
+      <View style={styles.sortRow}>
+        <Pressable
+          style={styles.sortButton}
+          onPress={() => setSortDesc((v) => !v)}
+        >
+          <Text style={styles.sortButtonIcon}>{sortDesc ? '⬇️' : '⬆️'}</Text>
+          <Text style={styles.sortButtonText}>{sortDesc ? t('words.sort.new2old') : t('words.sort.old2new')}</Text>
+        </Pressable>
+      </View>
+
+      {data.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>🔍</Text>
+          <Text style={styles.emptyTitle}>暫無結果</Text>
+          <Text style={styles.emptySubtitle}>
+            {search ? '搜尋不到符合條件的單字' : '暫無單字，前往「新增單字」頁面新增'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={data}
+          keyExtractor={(item, idx) => item.en + idx}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
-  searchInput: { width: "100%", borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, backgroundColor: "#fff", marginBottom: 8 },
-  sortRow: { marginBottom: 8, alignSelf: "flex-start" },
-  item: { padding: 12, backgroundColor: "#f5f7fb", borderRadius: 12 },
-  topArea: { marginBottom: 8 },
-  itemEn: { fontSize: 18, fontWeight: "bold" },
-  itemZh: { fontSize: 16 },
-  bottomRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, marginTop: 10 },
-  metaLeft: { fontSize: 11, color: "#666" },
-  reviewCount: { color: "#c62828" },
-  tiny: { fontSize: 12, color: "#666", marginBottom: 4 },
-  statusBoxInline: { alignItems: "center" },
-  pillRow: { flexDirection: "row", alignItems: "center" },
-  dot: { width: 14, height: 14, borderRadius: 7, marginHorizontal: 3, backgroundColor: "#ddd", borderWidth: 1, borderColor: "#bbb" },
-  dotRed: { backgroundColor: "#f44336" },
-  dotYellow: { backgroundColor: "#ffb300" },
-  dotGreen: { backgroundColor: "#43a047" },
-  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
-  tagPill: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#eceff1", borderRadius: 12, borderWidth: 1, borderColor: "#cfd8dc" },
-  tagPillReview: { backgroundColor: "#e3f2fd", borderColor: "#90caf9" },
-  tagPillText: { fontSize: 12, color: "#37474f" },
-  tagPillTextReview: { color: "#1565c0" },
+  container: { flex: 1, backgroundColor: "#f5f7fa" },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  title: { fontSize: 28, fontWeight: "700", color: "#1a1a1a" },
+  searchContainer: { marginHorizontal: 16, marginBottom: 16, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 2, borderColor: "#ddd", borderRadius: 12, paddingHorizontal: 12 },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, paddingHorizontal: 8, paddingVertical: 12, fontSize: 16, color: "#1a1a1a" },
+  sortRow: { marginHorizontal: 16, marginBottom: 16, alignSelf: "flex-start" },
+  sortButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#fff", borderRadius: 10, borderWidth: 2, borderColor: "#ddd" },
+  sortButtonIcon: { fontSize: 16 },
+  sortButtonText: { fontSize: 14, fontWeight: "600", color: "#1a1a1a" },
+  item: { marginHorizontal: 16, padding: 16, backgroundColor: "#fff", borderRadius: 14, borderWidth: 2, borderColor: "#ddd", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
+  topArea: { marginBottom: 12 },
+  itemEn: { fontSize: 18, fontWeight: "700", color: "#1a1a1a", marginBottom: 4 },
+  itemZh: { fontSize: 15, color: "#666", fontWeight: "500" },
+  bottomRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#f0f0f0" },
+  metaGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaIcon: { fontSize: 14 },
+  metaText: { fontSize: 12, color: "#666", fontWeight: "500" },
+  statusButton: { paddingHorizontal: 8, paddingVertical: 6, backgroundColor: "#f0f0f0", borderRadius: 8 },
+  pillRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#ddd", borderWidth: 1, borderColor: "#bbb" },
+  dotRed: { backgroundColor: "#e74c3c", borderColor: "#c0392b" },
+  dotYellow: { backgroundColor: "#f39c12", borderColor: "#d68910" },
+  dotGreen: { backgroundColor: "#4CAF50", borderColor: "#388e3c" },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  tagPill: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#f9fafb", borderRadius: 14, borderWidth: 2, borderColor: "#ddd" },
+  tagPillReview: { backgroundColor: "#e3f2fd", borderColor: "#0a7ea4" },
+  tagPillText: { fontSize: 12, color: "#666", fontWeight: "600" },
+  tagPillTextReview: { color: "#0a7ea4", fontWeight: "700" },
+  actionButton: { paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#f0f0f0", borderRadius: 8, borderWidth: 1, borderColor: "#ddd", alignItems: "center", justifyContent: "center" },
+  actionButtonText: { fontSize: 16 },
+  deleteButton: { backgroundColor: "#ffebee", borderColor: "#e74c3c" },
+  emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingBottom: 40 },
+  emptyIcon: { fontSize: 64, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: "700", color: "#1a1a1a", marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, color: "#999", textAlign: "center", lineHeight: 20 },
 });
