@@ -7,6 +7,7 @@ import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWord
 import * as Speech from "expo-speech";
 import { getSpeechOptions } from "@/utils/tts";
 import { useI18n } from "@/i18n";
+import { THEME } from "@/constants/Colors";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 const SORT_PREF_KEY = "@word_sort_desc";
@@ -248,14 +249,14 @@ export default function Words() {
       </View>
 
       <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <MaterialIcons name="search" size={20} color={THEME.colors.gray[500]} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder={t('words.search.placeholder')}
           value={search}
           onChangeText={setSearch}
           returnKeyType="search"
-          placeholderTextColor="#999"
+          placeholderTextColor={THEME.colors.gray[400]}
         />
       </View>
 

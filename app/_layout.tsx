@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { TabMarkProvider } from '@/context/TabMarkContext';
 import { I18nProvider } from '@/i18n';
+import { AlertProvider } from '@/components/ui/AlertManager';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -25,11 +26,13 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <I18nProvider>
         <TabMarkProvider>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style="auto" />
+          <AlertProvider>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+          </AlertProvider>
         </TabMarkProvider>
       </I18nProvider>
     </ThemeProvider>

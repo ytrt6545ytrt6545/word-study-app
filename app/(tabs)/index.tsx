@@ -1,8 +1,13 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useI18n } from "@/i18n";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Badge } from "@/components/ui/Badge";
+import { THEME } from "@/constants/Colors";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 function formatBuildDate(raw: string): string {
   const trimmed = (raw || "").trim();
@@ -21,6 +26,41 @@ function formatBuildDate(raw: string): string {
   const dd = String(normalized.getDate()).padStart(2, "0");
   return `${yyyy}/${mm}/${dd}`;
 }
+
+const MODULE_CARDS = [
+  {
+    id: "tags",
+    icon: "🏷️",
+    title: "index.tagsManage",
+    description: "管理學習標籤",
+    color: THEME.colors.feature.tags,
+    path: "/tags",
+  },
+  {
+    id: "review",
+    icon: "🔄",
+    title: "index.review",
+    description: "複習單字",
+    color: THEME.colors.feature.review,
+    path: "/review",
+  },
+  {
+    id: "exam",
+    icon: "📝",
+    title: "index.exam",
+    description: "考試練習",
+    color: THEME.colors.feature.exam,
+    path: "/exam",
+  },
+  {
+    id: "listening",
+    icon: "🎧",
+    title: "index.listening",
+    description: "index.listeningDescription",
+    color: THEME.colors.feature.listening,
+    path: "/listening",
+  },
+];
 
 export default function Index() {
   const router = useRouter();
@@ -43,83 +83,121 @@ export default function Index() {
     : t("index.lastUpdated.missing");
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t("index.title")}</Text>
-        <Text style={styles.updated}>{buildDateLabel}</Text>
-      </View>
+    <View style={styles.container}>
+      <PageHeader
+        title={t("index.title")}
+        subtitle={buildDateLabel}
+        backgroundColor={THEME.colors.primaryLight}
+      />
+      <ScrollView contentContainerStyle={styles.content}>
+        <Card variant="outlined" style={styles.noticeCard}>
+          <View style={styles.noticeContent}>
+            <Text style={styles.noticeIcon}>💡</Text>
+            <View style={styles.noticeTextWrapper}>
+              <Text style={styles.noticeText}>{t("index.notice")}</Text>
+            </View>
+          </View>
+        </Card>
 
-      <View style={styles.noticeCard}>
-        <Text style={styles.noticeIcon}>💡</Text>
-        <Text style={styles.noticeText}>{t("index.notice")}</Text>
-      </View>
-
-      <View style={styles.cardGrid}>
-        <Pressable
-          style={[styles.card, styles.cardTags]}
-          onPress={() => router.push("/tags")}
-        >
-          <Text style={styles.cardIcon}>🏷️</Text>
-          <Text style={styles.cardTitle}>{t("index.tagsManage")}</Text>
-          <Text style={styles.cardDescription}>管理學習標籤</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.card, styles.cardReview]}
-          onPress={() => router.push("/review")}
-        >
-          <Text style={styles.cardIcon}>🔄</Text>
-          <Text style={styles.cardTitle}>{t("index.review")}</Text>
-          <Text style={styles.cardDescription}>複習單字</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.card, styles.cardExam]}
-          onPress={() => router.push("/exam")}
-        >
-          <Text style={styles.cardIcon}>📝</Text>
-          <Text style={styles.cardTitle}>{t("index.exam")}</Text>
-          <Text style={styles.cardDescription}>考試練習</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+        <Text style={styles.sectionTitle}>📚 {t("index.modules")}</Text>
+        <View style={styles.cardGrid}>
+          {MODULE_CARDS.map((module) => (
+            <Pressable
+              key={module.id}
+              onPress={() => router.push(module.path)}
+              style={({ pressed }) => [
+                styles.moduleCard,
+                { borderTopColor: module.color },
+                pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <View style={styles.moduleCardHeader}>
+                <Text style={styles.cardIcon}>{module.icon}</Text>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={20}
+                  color={module.color}
+                  style={{ marginLeft: "auto" }}
+                />
+              </View>
+              <Text style={styles.cardTitle}>{t(module.title)}</Text>
+              <Text style={styles.cardDescription}>{module.description}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f7fa" },
-  content: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
-  header: { marginBottom: 24 },
-  title: { fontSize: 32, fontWeight: "700", color: "#1a1a1a", marginBottom: 4 },
-  updated: { fontSize: 14, color: "#999", fontWeight: "500" },
+  container: {
+    flex: 1,
+    backgroundColor: THEME.colors.surfaceAlt,
+  },
+  content: {
+    paddingHorizontal: THEME.spacing.lg,
+    paddingTop: THEME.spacing.lg,
+    paddingBottom: THEME.spacing.xxxl * 2,
+  },
   noticeCard: {
-    backgroundColor: "#fff3cd",
+    marginBottom: THEME.spacing.xxl,
+    padding: THEME.spacing.lg,
     borderLeftWidth: 4,
-    borderLeftColor: "#ffc107",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+    borderLeftColor: THEME.colors.semantic.warning,
+  },
+  noticeContent: {
     flexDirection: "row",
-    alignItems: "center"
+    alignItems: "flex-start",
+    gap: THEME.spacing.lg,
   },
-  noticeIcon: { fontSize: 20, marginRight: 12 },
-  noticeText: { flex: 1, color: "#856404", fontWeight: "600", fontSize: 14, lineHeight: 20 },
-  cardGrid: { gap: 12 },
-  card: {
-    borderRadius: 16,
-    padding: 20,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    backgroundColor: "#fff",
+  noticeIcon: {
+    fontSize: 28,
+    marginTop: THEME.spacing.xs,
+  },
+  noticeTextWrapper: {
+    flex: 1,
+  },
+  noticeText: {
+    ...THEME.typography.body,
+    color: THEME.colors.gray[900],
+    lineHeight: 24,
+    fontWeight: "500",
+  },
+  sectionTitle: {
+    ...THEME.typography.h3,
+    color: THEME.colors.gray[900],
+    marginBottom: THEME.spacing.lg,
+    marginTop: THEME.spacing.lg,
+  },
+  cardGrid: {
+    gap: THEME.spacing.lg,
+    marginBottom: THEME.spacing.xl,
+  },
+  moduleCard: {
+    padding: THEME.spacing.lg,
     minHeight: 140,
+    borderTopWidth: 4,
+    justifyContent: "flex-start",
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    ...THEME.shadows.md,
   },
-  cardTags: { borderTopWidth: 4, borderTopColor: "#2196F3" },
-  cardReview: { borderTopWidth: 4, borderTopColor: "#4CAF50" },
-  cardExam: { borderTopWidth: 4, borderTopColor: "#FF9800" },
-  cardIcon: { fontSize: 36, marginBottom: 8 },
-  cardTitle: { fontSize: 18, fontWeight: "700", color: "#1a1a1a", marginBottom: 4 },
-  cardDescription: { fontSize: 13, color: "#999", fontWeight: "500" },
+  moduleCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: THEME.spacing.md,
+  },
+  cardIcon: {
+    fontSize: 40,
+  },
+  cardTitle: {
+    ...THEME.typography.subtitle,
+    color: THEME.colors.gray[900],
+    marginBottom: THEME.spacing.sm,
+  },
+  cardDescription: {
+    ...THEME.typography.bodySmall,
+    color: THEME.colors.gray[500],
+  },
 });

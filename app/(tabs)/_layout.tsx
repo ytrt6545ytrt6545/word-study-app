@@ -5,7 +5,7 @@ import { Platform, View, StyleSheet } from 'react-native';
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
+import { Colors, THEME } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useTabMark } from '@/context/TabMarkContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -13,9 +13,9 @@ import { useI18n } from '@/i18n';
 
 const styles = StyleSheet.create({
   tabBarStyle: {
-    backgroundColor: '#fff',
+    backgroundColor: THEME.colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: THEME.colors.border,
     height: 70,
     paddingBottom: 8,
     paddingTop: 8,
@@ -40,8 +40,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#0a7ea4',
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: THEME.colors.primary,
+        tabBarInactiveTintColor: THEME.colors.gray[500],
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,

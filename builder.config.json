@@ -1,6 +1,6 @@
 {
   "command": "npm run start",
-  "serverUrl": "http://localhost:8081/exam/word",
+  "serverUrl": "http://localhost:8090/listening/%E8%A4%87%E7%BF%92",
   "authenticateProxy": false,
   "commitMode": "commits"
 }

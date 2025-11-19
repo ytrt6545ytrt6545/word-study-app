@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Pressable, StyleSheet, Text, View, Platform } from "react-native";
+import { Pressable, StyleSheet, Text, View, Platform } from "react-native";
 import * as Speech from "expo-speech";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { REVIEW_TAG, bumpReview, loadWords, toggleWordTag, Word, srsAnswer, getDailyStats, bumpDailyStats, getSrsLimits } from "@/utils/storage";
 import { getSpeechOptions } from "@/utils/tts";
 import { useI18n } from "@/i18n";
+import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
+import { useAlert } from "@/components/ui/AlertManager";
+import { THEME } from "@/constants/Colors";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 type QuizChoice = { zh: string; correct: boolean };
 type Quiz = { word: Word; en: string; choices: QuizChoice[] };
@@ -44,11 +49,13 @@ const speakWordTwice = async (text: string) => {
 
 export default function ReviewScreen() {
   const router = useRouter();
+  const alert = useAlert();
   const params = useLocalSearchParams<{ tag?: string | string[]; mode?: string | string[] }>();
   const tagParam = (Array.isArray(params.tag) ? params.tag[0] : params.tag || "").toString();
   const modeParam = (Array.isArray(params.mode) ? params.mode[0] : params.mode || "").toString();
   const isLoopMode = modeParam === 'tag-loop' || modeParam === 'loop';
   const { t } = useI18n();
+  const [showFinishDialog, setShowFinishDialog] = useState(false);
 
   const [allWords, setAllWords] = useState<Word[]>([]);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -189,7 +196,7 @@ export default function ReviewScreen() {
     }
     if (wrongs.length < 3 && lastInsufficientWordRef.current !== correct.en) {
       lastInsufficientWordRef.current = correct.en;
-      Alert.alert("\u9078\u9805\u4e0d\u8db3", "\u76ee\u524d\u6c92\u6709\u8db3\u5920\u7684\u5e72\u64fe\u9078\u9805\uff0c\u5efa\u8b70\u65b0\u589e\u66f4\u591a\u55ae\u5b57\u6216\u6a19\u7c64\u3002");
+      alert.warning("⚠️ 選項不足：建議新增更多單字或標籤");
     }
     const choices: QuizChoice[] = shuffle([
       { zh: correctZh, correct: true },
@@ -277,29 +284,29 @@ export default function ReviewScreen() {
           : w
         ));
         queueRef.current = queueRef.current.filter((w) => w.en !== current.en);
+        alert.success(`✅ 已移除「${current.en}」`);
         advanceToNext();
       } catch (err: any) {
-        Alert.alert('移除失敗', err?.message || '請稍後再試');
+        alert.error(err?.message || '移除失敗，請稍後再試');
       }
     };
 
     if (Platform.OS === 'web') {
-      // 在 Web 上直接執行，避免 Alert 確認造成使用者感覺「沒有動作」
       doRemove();
       return;
     }
 
-    Alert.alert(
+    alert.showDialog(
       targetTag === REVIEW_TAG ? '移出複習' : '移出標籤',
       targetTag === REVIEW_TAG
-        ? `確定要將 ${current.en} 從複習清單移除嗎？`
-        : `確定要將 ${current.en} 從標籤「${targetTag}」移除嗎？`,
+        ? `確定要將「${current.en}」從複習清單移除嗎？`
+        : `確定要將「${current.en}」從標籤「${targetTag}」移除嗎？`,
       [
-        { text: "\u53d6\u6d88", style: 'cancel' },
-        { text: "\u79fb\u9664", style: 'destructive', onPress: doRemove },
+        { label: "取消", onPress: () => {}, variant: 'secondary' },
+        { label: "移除", onPress: doRemove, variant: 'destructive' },
       ],
     );
-  }, [quiz, advanceToNext, tagParam]);
+  }, [quiz, advanceToNext, tagParam, alert]);
 
   const now = Date.now();
   const dueCount = candidates.filter((w) => w.srsDue && Date.parse(w.srsDue) <= now).length;
@@ -342,98 +349,240 @@ export default function ReviewScreen() {
     if (!finished) return;
     safeStopSpeech();
     if (isLoopMode) {
-      Alert.alert(
-        t('review.loop.done.title'),
-        t('review.loop.done.message'),
-        [
-          { text: t('review.loop.again'), onPress: () => { finishedRef.current = false; setFinished(false); setSelected(null); setQuiz(null); refillQueue(); } },
-          { text: t('review.loop.finish'), style: 'cancel', onPress: () => { setTimeout(() => { try { router.back(); } catch {} }, 3000); } },
-        ]
-      );
+      setShowFinishDialog(true);
       return;
     }
-    Alert.alert('完成', '複習完成，將於 3 秒後返回上一頁');
+    alert.info("✅ 複習完成，將於 3 秒後返回");
     const timer = setTimeout(() => {
       try { router.back(); } catch {}
     }, 3000);
     return () => clearTimeout(timer);
-  }, [finished, router, isLoopMode, refillQueue, t]);
+  }, [finished, router, isLoopMode, alert, t]);
 
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>{"\u8f09\u5165\u4e2d..."}</Text>
+        <Text style={styles.title}>載入中...</Text>
       </View>
     );
   }
 
   if (finished) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>{"\u8907\u7fd2\u5b8c\u6210"}</Text>
-        <Text style={styles.hint}>{"\u5c07\u65bc 3 \u79d2\u5f8c\u8fd4\u56de\u4e0a\u4e00\u9801"}</Text>
-      </View>
+      <>
+        <View style={styles.container}>
+          <Text style={styles.title}>複習完成 ✅</Text>
+          <Text style={styles.hint}>將於 3 秒後返回上一頁</Text>
+        </View>
+        <Dialog
+          visible={showFinishDialog}
+          title={t('review.loop.done.title')}
+          description={t('review.loop.done.message')}
+          actions={[
+            {
+              label: t('review.loop.again'),
+              variant: 'primary',
+              onPress: () => {
+                setShowFinishDialog(false);
+                finishedRef.current = false;
+                setFinished(false);
+                setSelected(null);
+                setQuiz(null);
+                refillQueue();
+              },
+            },
+            {
+              label: t('review.loop.finish'),
+              variant: 'secondary',
+              onPress: () => {
+                setShowFinishDialog(false);
+                setTimeout(() => {
+                  try {
+                    router.back();
+                  } catch {}
+                }, 500);
+              },
+            },
+          ]}
+          onDismiss={() => {
+            setShowFinishDialog(false);
+            setTimeout(() => {
+              try {
+                router.back();
+              } catch {}
+            }, 500);
+          }}
+        />
+      </>
     );
   }
 
   if (candidates.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>{"\u6c92\u6709\u53ef\u8907\u7fd2\u7684\u55ae\u5b57"}</Text>
-        <Text style={styles.hint}>{`\u8acb\u5728\u55ae\u5b57\u8a73\u60c5\u52a0\u5165\u300c${REVIEW_TAG}\u300d\u6a19\u7c64`}</Text>
-        <View style={{ height: 10 }} />
-        <Button title={"\u56de\u4e0a\u4e00\u9801"} onPress={() => router.back()} />
+        <Text style={styles.title}>沒有可複習的單字</Text>
+        <Text style={styles.hint}>{`請在單字詳情加入「${REVIEW_TAG}」標籤`}</Text>
+        <View style={{ height: 20 }} />
+        <Button
+          variant="primary"
+          onPress={() => router.back()}
+          icon={<MaterialIcons name="arrow-back" size={20} color="#fff" />}
+        >
+          返回上一頁
+        </Button>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('review.title')}</Text>
-      {!isLoopMode && (
-        <Text style={styles.hint}>{`到期：${dueCount}｜新卡可選：${Math.min(newPool, newRemain)}（今日 新卡 ${stats.newUsed}/${limits.dailyNewLimit}，複習 ${stats.reviewUsed}/${limits.dailyReviewLimit}）`}</Text>
-      )}
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('review.title')}</Text>
+        {!isLoopMode && (
+          <Text style={styles.stats}>
+            📊 到期：{dueCount} | 新卡：{Math.min(newPool, newRemain)} ({stats.newUsed}/{limits.dailyNewLimit})
+          </Text>
+        )}
+      </View>
       {quiz && (
-        <>
-          <Text style={styles.en}>{quiz.en}</Text>
-          <View style={{ height: 10 }} />
+        <View style={styles.content}>
+          <Text style={styles.wordDisplay}>{quiz.en}</Text>
           <View style={styles.choicesWrap}>
             {quiz.choices.map((c, i) => {
               const picked = selected === i;
               const showCorrect = selected != null && c.correct;
               const showWrong = selected != null && picked && !c.correct;
               return (
-                <Pressable key={i} style={[styles.choiceBtn, picked && styles.choicePicked]} onPress={() => onSelect(i)}>
-                  <Text style={styles.choiceText}>{c.zh}</Text>
-                  {showCorrect && <Text style={styles.markCorrect}>{"\u2713"}</Text>}
-                  {showWrong && <Text style={styles.markWrong}>{"\u2717"}</Text>}
+                <Pressable
+                  key={i}
+                  style={({ pressed }) => [
+                    styles.choiceBtn,
+                    picked && styles.choicePicked,
+                    showCorrect && styles.choiceCorrect,
+                    showWrong && styles.choiceWrong,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => onSelect(i)}
+                >
+                  <Text style={[styles.choiceText, (showCorrect || showWrong) && styles.choiceTextSelected]}>
+                    {c.zh}
+                  </Text>
+                  {showCorrect && <MaterialIcons name="check-circle" size={20} color={THEME.colors.semantic.success} />}
+                  {showWrong && <MaterialIcons name="cancel" size={20} color={THEME.colors.semantic.error} />}
                 </Pressable>
               );
             })}
           </View>
-          <View style={styles.row}>
-            <Button title={t('review.hearAgain')} onPress={speakAgain} />
-            <View style={{ width: 8 }} />
-            <Button title={t('review.next')} onPress={nextQuiz} disabled={selected == null} />
-            <View style={{ width: 8 }} />
-            <Button title={tagParam ? `太熟了，移除標籤（${tagParam}）` : t('review.removeReviewTag')} onPress={onRemoveReviewTag} />
+          <View style={styles.actions}>
+            <Button
+              variant="secondary"
+              size="md"
+              onPress={speakAgain}
+              icon={<MaterialIcons name="volume-up" size={18} color={THEME.colors.gray[900]} />}
+            >
+              {t('review.hearAgain')}
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onPress={nextQuiz}
+              disabled={selected == null}
+              icon={<MaterialIcons name="arrow-forward" size={18} color="#fff" />}
+              iconPosition="right"
+            >
+              {t('review.next')}
+            </Button>
+            <Button
+              variant="destructive"
+              size="md"
+              onPress={onRemoveReviewTag}
+              icon={<MaterialIcons name="delete" size={18} color="#fff" />}
+            >
+              移除
+            </Button>
           </View>
-        </>
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: '#fff' },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  hint: { color: '#666', marginTop: 6 },
-  en: { marginTop: 16, fontSize: 28, fontWeight: 'bold', textAlign: 'center' },
-  choicesWrap: { marginTop: 16, gap: 10 },
-  choiceBtn: { position: 'relative', padding: 14, borderWidth: 1, borderColor: '#bbb', borderRadius: 10, backgroundColor: '#f7f9fc' },
-  choicePicked: { borderColor: '#1976d2' },
-  choiceText: { fontSize: 18 },
-  markCorrect: { position: 'absolute', right: 10, top: 10, color: '#2e7d32', fontSize: 20, fontWeight: 'bold' },
-  markWrong: { position: 'absolute', right: 10, top: 10, color: '#c62828', fontSize: 20, fontWeight: 'bold' },
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: THEME.colors.surfaceAlt,
+  },
+  header: {
+    paddingHorizontal: THEME.spacing.lg,
+    paddingTop: THEME.spacing.lg,
+    paddingBottom: THEME.spacing.lg,
+    backgroundColor: THEME.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border,
+  },
+  title: {
+    ...THEME.typography.h2,
+    color: THEME.colors.gray[900],
+    marginBottom: THEME.spacing.sm,
+  },
+  stats: {
+    ...THEME.typography.bodySmall,
+    color: THEME.colors.gray[500],
+  },
+  content: {
+    flex: 1,
+    padding: THEME.spacing.lg,
+    justifyContent: 'center',
+  },
+  wordDisplay: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: THEME.colors.gray[900],
+    textAlign: 'center',
+    marginBottom: THEME.spacing.xl,
+  },
+  choicesWrap: {
+    gap: THEME.spacing.md,
+    marginBottom: THEME.spacing.xl,
+  },
+  choiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: THEME.spacing.lg,
+    borderWidth: 2,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.surface,
+  },
+  choicePicked: {
+    borderColor: THEME.colors.primary,
+    backgroundColor: THEME.colors.primaryLight,
+  },
+  choiceCorrect: {
+    borderColor: THEME.colors.semantic.success,
+    backgroundColor: THEME.colors.semantic.success + '15',
+  },
+  choiceWrong: {
+    borderColor: THEME.colors.semantic.error,
+    backgroundColor: THEME.colors.semantic.error + '15',
+  },
+  choiceText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: THEME.colors.gray[900],
+  },
+  choiceTextSelected: {
+    fontWeight: '700',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: THEME.spacing.md,
+  },
+  hint: {
+    ...THEME.typography.body,
+    color: THEME.colors.gray[500],
+    textAlign: 'center',
+    marginTop: THEME.spacing.lg,
+  },
 });
