@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, Animated } from "react-native";
 import * as Speech from "expo-speech";
 import { loadWords, Word } from "@/utils/storage";
 import { getSpeechOptions } from "@/utils/tts";
@@ -15,6 +15,159 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 const EN_DELAY = 300;
 const ZH_DELAY = 300;
 const AUTO_NEXT_DELAY = 1000;
+
+interface PlayingCardProps {
+  word: Word;
+  stage: number;
+  progress: number;
+  onPlayAgain: () => void;
+  onNextWord: () => void;
+  canGoNext: boolean;
+  t: any;
+}
+
+function PlayingCard({
+  word,
+  stage,
+  progress,
+  onPlayAgain,
+  onNextWord,
+  canGoNext,
+  t,
+}: PlayingCardProps) {
+  const [wordOpacity] = useState(new Animated.Value(0));
+  const [pulseAnim] = useState(new Animated.Value(1));
+  const loopRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (stage >= 1) {
+      Animated.timing(wordOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      wordOpacity.setValue(0);
+    }
+  }, [stage, wordOpacity]);
+
+  useEffect(() => {
+    if (stage >= 4 && stage < 5) {
+      loopRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loopRef.current.start();
+    } else {
+      if (loopRef.current) {
+        loopRef.current.stop();
+        loopRef.current = null;
+      }
+      pulseAnim.setValue(1);
+    }
+
+    return () => {
+      if (loopRef.current) {
+        loopRef.current.stop();
+      }
+    };
+  }, [stage, pulseAnim]);
+
+  return (
+    <View style={styles.playingCard}>
+      <View style={styles.progressIndicator}>
+        <View style={[styles.progressBar, { width: `${progress}%` }]} />
+      </View>
+
+      <Animated.View
+        style={[
+          styles.displayArea,
+          {
+            opacity: wordOpacity,
+          },
+        ]}
+      >
+        {stage >= 1 && (
+          <Animated.Text
+            style={[
+              styles.wordDisplay,
+              {
+                transform: [{ scale: stage >= 4 ? pulseAnim : 1 }],
+              },
+            ]}
+          >
+            {word.en}
+          </Animated.Text>
+        )}
+
+        {stage >= 2 && (
+          <View style={styles.repeatIndicator}>
+            <MaterialIcons name="repeat" size={16} color={THEME.colors.gray[500]} />
+            <Text style={styles.repeatText}>{t("listening.repeat")}</Text>
+          </View>
+        )}
+
+        {stage >= 3 && (
+          <View style={styles.finalRepeatIndicator}>
+            <MaterialIcons name="repeat" size={16} color={THEME.colors.feature.listening} />
+            <Text style={styles.finalRepeatText}>{t("listening.finalRepeat")}</Text>
+          </View>
+        )}
+
+        {stage >= 4 && (
+          <Animated.View
+            style={[
+              styles.translationBox,
+              {
+                transform: [{ scale: pulseAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.translation}>
+              {word.zh?.trim() ? word.zh : t("listening.noTranslation")}
+            </Text>
+          </Animated.View>
+        )}
+      </Animated.View>
+
+      {stage >= 5 && (
+        <View style={styles.actions}>
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
+            onPress={onPlayAgain}
+            icon={<MaterialIcons name="repeat" size={20} color={THEME.colors.gray[900]} />}
+          >
+            {t("listening.againButton")}
+          </Button>
+          {canGoNext && (
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              onPress={onNextWord}
+              icon={<MaterialIcons name="arrow-forward" size={20} color="#fff" />}
+              iconPosition="right"
+            >
+              {t("listening.nextWord")}
+            </Button>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function ListeningRunner() {
   const router = useRouter();
@@ -245,60 +398,17 @@ export default function ListeningRunner() {
         onBackPress={goBackToSelection}
       />
       <View style={styles.content}>
-        <View style={styles.playingCard}>
-          <View style={styles.progressIndicator}>
-            <View style={[styles.progressBar, { width: `${((currentIndex + 1) / words.length) * 100}%` }]} />
-          </View>
-
-          <View style={styles.displayArea}>
-            {stage >= 1 && (
-              <Text style={styles.wordDisplay}>{currentWord.en}</Text>
-            )}
-            {stage >= 2 && (
-              <View style={styles.repeatIndicator}>
-                <MaterialIcons name="repeat" size={16} color={THEME.colors.gray[500]} />
-                <Text style={styles.repeatText}>{t("listening.repeat")}</Text>
-              </View>
-            )}
-            {stage >= 3 && (
-              <View style={styles.finalRepeatIndicator}>
-                <MaterialIcons name="repeat" size={16} color={THEME.colors.feature.listening} />
-                <Text style={styles.finalRepeatText}>{t("listening.finalRepeat")}</Text>
-              </View>
-            )}
-            {stage >= 4 && (
-              <View style={styles.translationBox}>
-                <Text style={styles.translation}>{currentWord.zh?.trim() ? currentWord.zh : t("listening.noTranslation")}</Text>
-              </View>
-            )}
-          </View>
-
-          {stage >= 5 && (
-            <View style={styles.actions}>
-              <Button
-                variant="secondary"
-                size="lg"
-                fullWidth
-                onPress={runSequence}
-                icon={<MaterialIcons name="repeat" size={20} color={THEME.colors.gray[900]} />}
-              >
-                {t("listening.againButton")}
-              </Button>
-              {currentIndex < words.length - 1 && (
-                <Button
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  onPress={goNextWord}
-                  icon={<MaterialIcons name="arrow-forward" size={20} color="#fff" />}
-                  iconPosition="right"
-                >
-                  {t("listening.nextWord")}
-                </Button>
-              )}
-            </View>
-          )}
-        </View>
+        {currentWord && (
+          <PlayingCard
+            word={currentWord}
+            stage={stage}
+            progress={((currentIndex + 1) / words.length) * 100}
+            onPlayAgain={runSequence}
+            onNextWord={goNextWord}
+            canGoNext={currentIndex < words.length - 1}
+            t={t}
+          />
+        )}
       </View>
     </View>
   );
@@ -307,7 +417,7 @@ export default function ListeningRunner() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.surfaceAlt
+    backgroundColor: THEME.colors.surfaceAlt,
   },
   content: {
     flex: 1,
@@ -316,20 +426,21 @@ const styles = StyleSheet.create({
   },
   playingCard: {
     backgroundColor: THEME.colors.surface,
-    borderRadius: THEME.radius.lg,
+    borderRadius: THEME.radius.xl,
     padding: THEME.spacing.xl,
-    ...THEME.shadows.md,
+    ...THEME.shadows.lg,
   },
   progressIndicator: {
-    height: 4,
+    height: 6,
     backgroundColor: THEME.colors.gray[200],
-    borderRadius: 2,
+    borderRadius: 3,
     overflow: "hidden",
     marginBottom: THEME.spacing.xl,
   },
   progressBar: {
     height: "100%",
     backgroundColor: THEME.colors.feature.listening,
+    borderRadius: 3,
   },
   displayArea: {
     minHeight: 280,
@@ -338,42 +449,49 @@ const styles = StyleSheet.create({
     marginBottom: THEME.spacing.xl,
   },
   wordDisplay: {
-    fontSize: 48,
-    fontWeight: "700",
+    fontSize: 52,
+    fontWeight: "800",
     color: THEME.colors.gray[900],
     textAlign: "center",
+    letterSpacing: -1,
   },
   repeatIndicator: {
     flexDirection: "row",
     alignItems: "center",
     gap: THEME.spacing.md,
     marginTop: THEME.spacing.lg,
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.sm,
+    backgroundColor: THEME.colors.gray[100],
+    borderRadius: THEME.radius.md,
   },
   repeatText: {
     fontSize: 14,
-    color: THEME.colors.gray[500],
-    fontWeight: "500",
+    color: THEME.colors.gray[600],
+    fontWeight: "600",
   },
   finalRepeatIndicator: {
     flexDirection: "row",
     alignItems: "center",
     gap: THEME.spacing.md,
     marginTop: THEME.spacing.lg,
-    paddingHorizontal: THEME.spacing.md,
-    paddingVertical: THEME.spacing.sm,
-    backgroundColor: THEME.colors.primaryLight,
+    paddingHorizontal: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.md,
+    backgroundColor: THEME.colors.feature.listening + "15",
+    borderLeftWidth: 4,
+    borderLeftColor: THEME.colors.feature.listening,
     borderRadius: THEME.radius.md,
   },
   finalRepeatText: {
     fontSize: 14,
-    color: THEME.colors.primary,
-    fontWeight: "600",
+    color: THEME.colors.feature.listening,
+    fontWeight: "700",
   },
   translationBox: {
     marginTop: THEME.spacing.xl,
     paddingHorizontal: THEME.spacing.lg,
-    paddingVertical: THEME.spacing.md,
-    backgroundColor: THEME.colors.gray[50],
+    paddingVertical: THEME.spacing.lg,
+    backgroundColor: THEME.colors.semantic.warning + "15",
     borderLeftWidth: 4,
     borderLeftColor: THEME.colors.semantic.warning,
     borderRadius: THEME.radius.md,
@@ -381,8 +499,9 @@ const styles = StyleSheet.create({
   translation: {
     fontSize: 18,
     color: THEME.colors.gray[900],
-    fontWeight: "600",
+    fontWeight: "700",
     textAlign: "center",
+    lineHeight: 24,
   },
   actions: {
     gap: THEME.spacing.md,

@@ -130,7 +130,10 @@ export function Button({
         sizeStyles,
         fullWidth && { flex: 1 },
         isDisabled && { opacity: 0.6 },
-        pressed && !isDisabled && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+        pressed && !isDisabled && {
+          opacity: 0.9,
+          transform: [{ scale: 0.96 }],
+        },
         style,
       ]}
       {...props}

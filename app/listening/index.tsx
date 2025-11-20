@@ -1,12 +1,10 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View, Animated, Pressable } from "react-native";
 import { loadTags, loadWords, Word } from "@/utils/storage";
 import { useI18n } from "@/i18n";
-import { Card } from "@/components/ui/Card";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { THEME } from "@/constants/Colors";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -16,11 +14,64 @@ type TagCandidate = {
   count: number;
 };
 
+function TagCardItem({ item, onPress }: { item: TagCandidate; onPress: () => void }) {
+  const [scaleAnim] = useState(new Animated.Value(1));
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.tagCardWrapper,
+        {
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}
+    >
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={({ pressed }) => [
+          styles.tagCardContent,
+          pressed && styles.tagCardPressed,
+        ]}
+      >
+        <View style={styles.tagInfo}>
+          <Text style={styles.tagName}>{item.name}</Text>
+          <View style={styles.tagCountContainer}>
+            <MaterialIcons name="audiotrack" size={14} color={THEME.colors.gray[500]} />
+            <Text style={styles.tagCount}>
+              {item.count} {item.count === 1 ? "word" : "words"}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.arrowContainer}>
+          <MaterialIcons name="arrow-forward" size={22} color={THEME.colors.feature.listening} />
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function ListeningTagPicker() {
   const router = useRouter();
   const { t } = useI18n();
   const [tags, setTags] = useState<TagCandidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fadeAnim] = useState(new Animated.Value(0));
 
   const fetchTagStats = useCallback(async (): Promise<TagCandidate[]> => {
     const [tagList, words] = await Promise.all([loadTags(), loadWords()]);
@@ -40,13 +91,29 @@ export default function ListeningTagPicker() {
     useCallback(() => {
       let cancelled = false;
       setLoading(true);
+      fadeAnim.setValue(0);
+
       fetchTagStats()
         .then((available) => {
-          if (!cancelled) setTags(available);
+          if (!cancelled) {
+            setTags(available);
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }).start();
+          }
         })
         .catch((err) => {
           console.error("load listening tags failed", err);
-          if (!cancelled) setTags([]);
+          if (!cancelled) {
+            setTags([]);
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }).start();
+          }
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -54,26 +121,14 @@ export default function ListeningTagPicker() {
       return () => {
         cancelled = true;
       };
-    }, [fetchTagStats])
+    }, [fetchTagStats, fadeAnim])
   );
 
   const renderItem = ({ item }: { item: TagCandidate }) => (
-    <Card
-      pressable
+    <TagCardItem
+      item={item}
       onPress={() => router.push({ pathname: "/listening/[tag]", params: { tag: item.name } })}
-      style={styles.tagCard}
-    >
-      <View style={styles.cardContent}>
-        <View>
-          <Text style={styles.tagName}>{item.name}</Text>
-          <Text style={styles.tagCount}>
-            <MaterialIcons name="audiotrack" size={12} color={THEME.colors.gray[500]} />
-            {" "}{item.count} {t("listening.words")}
-          </Text>
-        </View>
-      </View>
-      <MaterialIcons name="arrow-forward" size={24} color={THEME.colors.feature.listening} />
-    </Card>
+    />
   );
 
   return (
@@ -85,7 +140,7 @@ export default function ListeningTagPicker() {
         backgroundColor={THEME.colors.feature.listening + "15"}
       />
 
-      <View style={styles.content}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {loading ? (
           <LoadingSpinner size="md" color={THEME.colors.feature.listening} />
         ) : tags.length === 0 ? (
@@ -104,7 +159,7 @@ export default function ListeningTagPicker() {
             scrollEnabled={false}
           />
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -120,28 +175,47 @@ const styles = StyleSheet.create({
     paddingTop: THEME.spacing.lg,
   },
   listContent: {
-    paddingVertical: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.sm,
   },
-  tagCard: {
+  tagCardWrapper: {
+    marginBottom: THEME.spacing.md,
+  },
+  tagCardContent: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
     paddingHorizontal: THEME.spacing.lg,
     paddingVertical: THEME.spacing.lg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderTopWidth: 3,
-    borderTopColor: THEME.colors.feature.listening,
+    borderLeftWidth: 4,
+    borderLeftColor: THEME.colors.feature.listening,
+    ...THEME.shadows.md,
   },
-  cardContent: {
+  tagCardPressed: {
+    backgroundColor: THEME.colors.surfaceAlt,
+  },
+  tagInfo: {
     flex: 1,
     gap: THEME.spacing.sm,
   },
   tagName: {
     ...THEME.typography.subtitle,
     color: THEME.colors.gray[900],
+    fontWeight: "700",
+  },
+  tagCountContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: THEME.spacing.sm,
   },
   tagCount: {
     ...THEME.typography.bodySmall,
     color: THEME.colors.gray[500],
-    marginTop: THEME.spacing.xs,
+  },
+  arrowContainer: {
+    marginLeft: THEME.spacing.lg,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
