@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { Toast, ToastType } from './Toast';
+import React, { createContext, useCallback, useContext, useState } from 'react';
 import { Dialog } from './Dialog';
+import { Toast, ToastType } from './Toast';
 
 interface ToastAlert {
   type: 'toast';
@@ -52,10 +52,10 @@ interface AlertContextType {
     }>
   ) => string;
   dismiss: (id: string) => void;
-  success: (message: string, options?: Omit<Parameters<typeof showToast>[1], 'type'>) => string;
-  error: (message: string, options?: Omit<Parameters<typeof showToast>[1], 'type'>) => string;
-  warning: (message: string, options?: Omit<Parameters<typeof showToast>[1], 'type'>) => string;
-  info: (message: string, options?: Omit<Parameters<typeof showToast>[1], 'type'>) => string;
+  success: (message: string, options?: any) => string;
+  error: (message: string, options?: any) => string;
+  warning: (message: string, options?: any) => string;
+  info: (message: string, options?: any) => string;
 }
 
 const AlertContext = createContext<AlertContextType | undefined>(undefined);

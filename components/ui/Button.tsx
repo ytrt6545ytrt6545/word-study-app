@@ -1,6 +1,6 @@
-import React from 'react';
-import { Pressable, Text, StyleSheet, PressableProps, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { THEME } from '@/constants/Colors';
+import React from 'react';
+import { ActivityIndicator, Pressable, PressableProps, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -124,7 +124,7 @@ export function Button({
   return (
     <Pressable
       onPress={isDisabled ? undefined : onPress}
-      style={({ pressed }) => [
+      style={({ pressed }) => ([
         styles.button,
         variantStyles.container,
         sizeStyles,
@@ -135,7 +135,7 @@ export function Button({
           transform: [{ scale: 0.96 }],
         },
         style,
-      ]}
+      ] as any)}
       {...props}
     >
       <Pressable
@@ -193,3 +193,4 @@ const styles = StyleSheet.create({
 });
 
 import { View } from 'react-native';
+

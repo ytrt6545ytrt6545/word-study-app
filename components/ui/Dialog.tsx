@@ -1,16 +1,15 @@
-import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  TextInput,
-  ViewStyle,
-} from 'react-native';
 import { THEME } from '@/constants/Colors';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React from 'react';
+import {
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+    ViewStyle
+} from 'react-native';
 
 interface DialogAction {
   label: string;
@@ -62,7 +61,7 @@ export function Dialog({
         <Pressable
           style={[
             styles.dialog,
-            { maxHeight },
+            ({ maxHeight } as any),
           ]}
           onPress={(e) => e.stopPropagation()}
         >
@@ -100,11 +99,11 @@ export function Dialog({
                 {defaultActions.map((action, index) => (
                   <Pressable
                     key={index}
-                    style={({ pressed }) => [
+                    style={({ pressed }) => ([
                       styles.action,
                       getActionStyle(action.variant || 'secondary'),
                       pressed && { opacity: 0.7 },
-                    ]}
+                    ] as any)}
                     onPress={() => {
                       action.onPress();
                     }}

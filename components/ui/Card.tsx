@@ -1,6 +1,6 @@
-import React, { PropsWithChildren } from 'react';
-import { View, StyleSheet, ViewProps, Pressable, PressableProps } from 'react-native';
 import { THEME } from '@/constants/Colors';
+import React, { PropsWithChildren } from 'react';
+import { Pressable, PressableProps, StyleSheet, View, ViewProps } from 'react-native';
 
 interface CardProps extends ViewProps {
   variant?: 'default' | 'elevated' | 'outlined';
@@ -29,14 +29,14 @@ export function Card({
     style,
   ];
 
-  if (isPressable) {
+    if (isPressable) {
     const { pressable, ...pressableProps } = props as PressableCardProps;
     return (
       <Pressable
-        style={({ pressed }) => [
+        style={({ pressed }) => ([
           ...baseStyle,
           pressed && { opacity: 0.8 },
-        ]}
+        ] as any)}
         {...pressableProps}
       >
         {children}
@@ -45,7 +45,7 @@ export function Card({
   }
 
   return (
-    <View style={baseStyle} {...(props as CardProps)}>
+    <View style={baseStyle as any} {...(props as CardProps)}>
       {children}
     </View>
   );

@@ -1,1 +1,4 @@
-declare module 'chinese-conv' {\n  export function tify(input: string): string;\n  export function sify(input: string): string;\n}\n
+declare module 'chinese-conv' {
+  export function tify(input: string): string;
+  export function sify(input: string): string;
+}

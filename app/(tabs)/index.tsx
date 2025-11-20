@@ -1,13 +1,12 @@
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
-import { useRouter } from "expo-router";
-import { useI18n } from "@/i18n";
-import Constants from "expo-constants";
-import * as Updates from "expo-updates";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Badge } from "@/components/ui/Badge";
 import { THEME } from "@/constants/Colors";
+import { useI18n } from "@/i18n";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import Constants from "expo-constants";
+import { useRouter } from "expo-router";
+import * as Updates from "expo-updates";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 function formatBuildDate(raw: string): string {
   const trimmed = (raw || "").trim();
@@ -104,7 +103,7 @@ export default function Index() {
           {MODULE_CARDS.map((module) => (
             <Pressable
               key={module.id}
-              onPress={() => router.push(module.path)}
+              onPress={() => router.push(module.path as any)}
               style={({ pressed }) => [
                 styles.moduleCard,
                 { borderTopColor: module.color },

@@ -1,14 +1,14 @@
+import { THEME } from "@/constants/Colors";
+import { useI18n } from "@/i18n";
+import { bumpReview, getWordFontSize, loadWords, saveWords, Word, WordStatus } from "@/utils/storage";
+import { getSpeechOptions } from "@/utils/tts";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { bumpReview, loadWords, saveWords, Word, WordStatus, REVIEW_TAG, getWordFontSize } from "@/utils/storage";
 import * as Speech from "expo-speech";
-import { getSpeechOptions } from "@/utils/tts";
-import { useI18n } from "@/i18n";
-import { THEME } from "@/constants/Colors";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const SORT_PREF_KEY = "@word_sort_desc";
 
@@ -106,8 +106,8 @@ export default function Words() {
     const filtered = q
       ? words.filter((w) => {
           const fields = [w.en, w.zh, w.exampleEn, w.exampleZh].map((s) => (s || "").toLowerCase());
-          const tags = (w.tags || []).map((t) => (t || "").toLowerCase());
-          return fields.some((s) => s.includes(q)) || tags.some((t) => t.includes(q));
+          // NOTE: per request, do not include tag text in the main word list search/filter
+          return fields.some((s) => s.includes(q));
         })
       : words;
     const arr = [...filtered];
@@ -175,25 +175,7 @@ export default function Words() {
         <Text style={styles.itemZh}>{item.zh || '—'}</Text>
       </View>
 
-      {/* Middle: tags */}
-      {item.tags && item.tags.length > 0 && (
-        <View style={styles.tagRow}>
-          {item.tags!.map((tagName) => (
-            <Pressable
-              key={tagName}
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push({ pathname: "/tags/[tag]", params: { tag: tagName } });
-              }}
-              style={[styles.tagPill, tagName === REVIEW_TAG && styles.tagPillReview]}
-            >
-              <Text style={[styles.tagPillText, tagName === REVIEW_TAG && styles.tagPillTextReview]}>
-                {tagName === REVIEW_TAG ? '🔄' : '🏷️'} {tagName}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      {/* Tags removed from list view per request */}
 
       {/* Bottom: date, review count, status, read, delete */}
       <View style={styles.bottomRow}>

@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import {
-  View,
-  TextInput,
-  Text,
-  StyleSheet,
-  Pressable,
-  TextInputProps,
-  ViewStyle,
-} from 'react-native';
 import { THEME } from '@/constants/Colors';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useState } from 'react';
+import {
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    TextInputProps,
+    View,
+    ViewStyle,
+} from 'react-native';
 
 interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -77,8 +77,8 @@ export function Input({
         <TextInput
           style={[
             styles.input,
-            leftIcon && { marginLeft: THEME.spacing.sm },
-            rightIcon && { marginRight: THEME.spacing.sm },
+            leftIcon ? { marginLeft: THEME.spacing.sm } : undefined,
+            rightIcon ? { marginRight: THEME.spacing.sm } : undefined,
           ]}
           placeholder={placeholder}
           placeholderTextColor={THEME.colors.gray[400]}

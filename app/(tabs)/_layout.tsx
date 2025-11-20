@@ -1,15 +1,15 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, View, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors, THEME } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { THEME } from '@/constants/Colors';
 import { useTabMark } from '@/context/TabMarkContext';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const styles = StyleSheet.create({
   tabBarStyle: {
@@ -45,13 +45,9 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            ...styles.tabBarStyle,
-            position: 'absolute',
-          },
-          default: styles.tabBarStyle,
-        }),
+        tabBarStyle: Platform.OS === 'ios'
+          ? { ...styles.tabBarStyle, position: 'absolute' }
+          : styles.tabBarStyle,
         tabBarLabelStyle: styles.labelStyle,
         tabBarItemStyle: {
           paddingVertical: 4,
