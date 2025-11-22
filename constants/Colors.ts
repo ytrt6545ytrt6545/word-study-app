@@ -4,8 +4,8 @@
  */
 
 // Primary color palette
-const PRIMARY_BLUE = '#0a7ea4';
-const PRIMARY_LIGHT = '#e8f4f8';
+const PRIMARY_BLUE = '#3b82f6';
+const PRIMARY_LIGHT = '#eef4ff'; // A lighter shade for the new primary blue
 
 // Semantic colors for different features
 const FEATURE_COLORS = {

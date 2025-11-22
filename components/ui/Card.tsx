@@ -2,41 +2,41 @@ import { THEME } from '@/constants/Colors';
 import React, { PropsWithChildren } from 'react';
 import { Pressable, PressableProps, StyleSheet, View, ViewProps } from 'react-native';
 
+// Simplified variants. 'elevated' is now the default visual style.
+type CardVariant = 'default';
+
 interface CardProps extends ViewProps {
-  variant?: 'default' | 'elevated' | 'outlined';
   pressable?: false;
+  variant?: CardVariant;
 }
 
 interface PressableCardProps extends Omit<PressableProps, 'children'> {
-  variant?: 'default' | 'elevated' | 'outlined';
   pressable: true;
+  variant?: CardVariant;
 }
 
 type Props = PropsWithChildren<CardProps | PressableCardProps>;
 
 export function Card({
   children,
-  variant = 'default',
   style,
   ...props
 }: Props) {
-  const pressable = 'pressable' in props && props.pressable;
-  const isPressable = pressable as boolean;
+  const isPressable = 'pressable' in props && props.pressable;
 
   const baseStyle = [
     styles.card,
-    getVariantStyle(variant),
     style,
   ];
 
-    if (isPressable) {
+  if (isPressable) {
     const { pressable, ...pressableProps } = props as PressableCardProps;
     return (
       <Pressable
-        style={({ pressed }) => ([
+        style={({ pressed }) => [
           ...baseStyle,
-          pressed && { opacity: 0.8 },
-        ] as any)}
+          pressed && styles.pressed,
+        ]}
         {...pressableProps}
       >
         {children}
@@ -45,46 +45,23 @@ export function Card({
   }
 
   return (
-    <View style={baseStyle as any} {...(props as CardProps)}>
+    <View style={baseStyle} {...(props as CardProps)}>
       {children}
     </View>
   );
 }
 
-function getVariantStyle(variant: 'default' | 'elevated' | 'outlined') {
-  switch (variant) {
-    case 'elevated':
-      return [
-        styles.elevated,
-        THEME.shadows.lg,
-      ];
-    case 'outlined':
-      return styles.outlined;
-    case 'default':
-    default:
-      return [
-        styles.default,
-        THEME.shadows.md,
-      ];
-  }
-}
-
 const styles = StyleSheet.create({
   card: {
-    borderRadius: THEME.radius.lg,
-    overflow: 'hidden',
     backgroundColor: THEME.colors.surface,
-  },
-  default: {
+    borderRadius: THEME.radius.xl, // Slightly larger radius for a softer look
     borderWidth: 1,
     borderColor: THEME.colors.border,
+    ...THEME.shadows.md, // Consistent shadow style
+    padding: THEME.spacing.lg,
   },
-  elevated: {
-    borderWidth: 0,
-  },
-  outlined: {
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    backgroundColor: THEME.colors.surfaceAlt,
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    ...THEME.shadows.sm, // Reduce shadow on press
   },
 });

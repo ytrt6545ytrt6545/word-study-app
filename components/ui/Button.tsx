@@ -1,6 +1,6 @@
 import { THEME } from '@/constants/Colors';
 import React from 'react';
-import { ActivityIndicator, Pressable, PressableProps, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, PressableProps, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -16,93 +16,40 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
   iconPosition?: 'left' | 'right';
 }
 
-const getVariantStyles = (
-  variant: ButtonVariant,
-): {
-  container: ViewStyle;
-  text: TextStyle;
-} => {
+const getVariantStyles = (variant: ButtonVariant): { container: ViewStyle; text: TextStyle } => {
   switch (variant) {
     case 'primary':
-      return {
-        container: {
-          backgroundColor: THEME.colors.primary,
-        },
-        text: {
-          color: '#fff',
-        },
-      };
+      return { container: { backgroundColor: THEME.colors.primary }, text: { color: '#fff' } };
     case 'secondary':
       return {
-        container: {
-          backgroundColor: THEME.colors.gray[100],
-          borderWidth: 1.5,
-          borderColor: THEME.colors.border,
-        },
-        text: {
-          color: THEME.colors.gray[900],
-        },
+        container: { backgroundColor: THEME.colors.gray[100], borderWidth: 1, borderColor: THEME.colors.border },
+        text: { color: THEME.colors.gray[900] },
       };
     case 'ghost':
       return {
-        container: {
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderColor: THEME.colors.primary,
-        },
-        text: {
-          color: THEME.colors.primary,
-        },
+        container: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: THEME.colors.primary },
+        text: { color: THEME.colors.primary },
       };
     case 'destructive':
-      return {
-        container: {
-          backgroundColor: THEME.colors.semantic.error,
-        },
-        text: {
-          color: '#fff',
-        },
-      };
+      return { container: { backgroundColor: THEME.colors.semantic.error }, text: { color: '#fff' } };
     case 'success':
-      return {
-        container: {
-          backgroundColor: THEME.colors.semantic.success,
-        },
-        text: {
-          color: '#fff',
-        },
-      };
+      return { container: { backgroundColor: THEME.colors.semantic.success }, text: { color: '#fff' } };
   }
 };
 
 const getSizeStyles = (size: ButtonSize) => {
   switch (size) {
     case 'sm':
-      return {
-        paddingVertical: THEME.spacing.sm,
-        paddingHorizontal: THEME.spacing.md,
-        fontSize: 13,
-        height: 36,
-      };
+      return { paddingVertical: THEME.spacing.sm, paddingHorizontal: THEME.spacing.md, fontSize: 13, height: 36 };
     case 'lg':
-      return {
-        paddingVertical: THEME.spacing.lg,
-        paddingHorizontal: THEME.spacing.xl,
-        fontSize: 16,
-        height: 52,
-      };
+      return { paddingVertical: THEME.spacing.lg, paddingHorizontal: THEME.spacing.xl, fontSize: 16, height: 52 };
     case 'md':
     default:
-      return {
-        paddingVertical: THEME.spacing.md,
-        paddingHorizontal: THEME.spacing.lg,
-        fontSize: 14,
-        height: 44,
-      };
+      return { paddingVertical: THEME.spacing.md, paddingHorizontal: THEME.spacing.lg, fontSize: 14, height: 44 };
   }
 };
 
-export function Button({
+const ButtonComponent = ({
   children,
   variant = 'primary',
   size = 'md',
@@ -114,7 +61,7 @@ export function Button({
   icon,
   iconPosition = 'left',
   ...props
-}: ButtonProps) {
+}: ButtonProps) => {
   const variantStyles = getVariantStyles(variant);
   const sizeStyles = getSizeStyles(size);
   const isDisabled = disabled || loading;
@@ -124,63 +71,51 @@ export function Button({
   return (
     <Pressable
       onPress={isDisabled ? undefined : onPress}
-      style={({ pressed }) => ([
+      style={({ pressed }) => [
         styles.button,
         variantStyles.container,
         sizeStyles,
-        fullWidth && { flex: 1 },
-        isDisabled && { opacity: 0.6 },
-        pressed && !isDisabled && {
-          opacity: 0.9,
-          transform: [{ scale: 0.96 }],
+        fullWidth && styles.fullWidth,
+        isDisabled && styles.disabled,
+        // Apply shadows and transform only for primary/success/destructive variants
+        (variant === 'primary' || variant === 'success' || variant === 'destructive') && {
+          ...(pressed && !isDisabled ? styles.pressed : styles.notPressed),
         },
         style,
-      ] as any)}
+      ]}
       {...props}
     >
-      <Pressable
-        style={styles.contentContainer}
-        onPress={(e) => {
-          e.stopPropagation();
-        }}
-      >
+      <View style={styles.contentContainer}>
         {loading ? (
-          <ActivityIndicator
-            size="small"
-            color={variantStyles.text.color}
-            style={{ marginRight: THEME.spacing.sm }}
-          />
+          <ActivityIndicator size="small" color={variantStyles.text.color} style={styles.iconSpacing} />
         ) : (
-          icon && iconPosition === 'left' && icon
+          icon && iconPosition === 'left' && <View style={styles.iconSpacing}>{icon}</View>
         )}
         {childrenText && (
-          <Text
-            style={[
-              styles.text,
-              variantStyles.text,
-              { fontSize: sizeStyles.fontSize },
-              loading && { marginLeft: THEME.spacing.sm },
-            ]}
-          >
+          <Text style={[styles.text, variantStyles.text, { fontSize: sizeStyles.fontSize }]}>
             {childrenText}
           </Text>
         )}
         {!loading && icon && iconPosition === 'right' && (
-          <View style={{ marginLeft: THEME.spacing.sm }}>
-            {icon}
-          </View>
+          <View style={styles.iconSpacingRight}>{icon}</View>
         )}
-      </Pressable>
+      </View>
     </Pressable>
   );
-}
+};
+
+export const Button = React.memo(ButtonComponent);
 
 const styles = StyleSheet.create({
   button: {
     borderRadius: THEME.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible', // Allow shadow to be visible
+    flexDirection: 'row',
+  },
+  fullWidth: {
+    flex: 1,
   },
   contentContainer: {
     flexDirection: 'row',
@@ -188,9 +123,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    fontWeight: '600',
+    ...THEME.typography.label,
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  pressed: {
+    ...THEME.shadows.sm,
+    transform: [{ scale: 0.98 }],
+  },
+  notPressed: {
+    ...THEME.shadows.md,
+  },
+  iconSpacing: {
+    marginRight: THEME.spacing.sm,
+  },
+  iconSpacingRight: {
+    marginLeft: THEME.spacing.sm,
   },
 });
-
-import { View } from 'react-native';
 
