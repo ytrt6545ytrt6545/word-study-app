@@ -298,8 +298,8 @@ export async function saveTags(tags: string[]) {
   // ensure system tags always present
   normSet.add(REVIEW_TAG);
   normSet.add(EXAM_TAG);
-  const norm = Array.from(normSet);
-  await AsyncStorage.setItem(TAGS_KEY, JSON.stringify(norm));
+  const finalTags = Array.from(normSet);
+  await AsyncStorage.setItem(TAGS_KEY, JSON.stringify(finalTags));
 }
 
 export async function addTag(tag: string): Promise<string[]> {
@@ -479,30 +479,56 @@ export async function renameTag(oldName: string, newName: string): Promise<strin
 // Subtree operations for hierarchical tags
 export async function removeTagSubtree(tag: string): Promise<string[]> {
   const base = normalizeTagPath(tag || "");
-  if (!base || base === REVIEW_TAG || base === EXAM_TAG) return loadTags();
-  const currentTags = await loadTags();
+  if (!base || SYSTEM_TAGS.has(base)) return loadTags();
+
+  // 1. Read all data first
+  const [currentTags, words, order] = await Promise.all([
+    loadTags(),
+    loadWords(),
+    loadTagOrder(),
+  ]);
+
+  // 2. Calculate next state
   const nextTags = currentTags.filter((t) => !(t === base || pathStartsWith(t, base)));
-  await saveTags(nextTags);
-  const words = await loadWords();
-  let dirty = false;
-  const updated = words.map((w) => {
+  
+  let dirtyWords = false;
+  const updatedWords = words.map((w) => {
     const wt = Array.isArray(w.tags) ? w.tags : [];
+    if (wt.length === 0) return w;
     const filtered = wt.filter((t) => {
       const n = normalizeTagPath(t || "");
       return !(n && (n === base || pathStartsWith(n, base)));
     });
-    if (filtered.length !== wt.length) { dirty = true; return { ...w, tags: filtered } as Word; }
+    if (filtered.length !== wt.length) {
+      dirtyWords = true;
+      return { ...w, tags: filtered };
+    }
     return w;
   });
-  if (dirty) await saveWords(updated);
-  // order: remove the direct child from its parent; drop any sub-orders is optional
+
   const p = parentOf(base);
   const n = nameOf(base);
-  const order = await loadTagOrder();
-  if (Array.isArray(order[p])) {
-    order[p] = order[p].filter((x) => x !== n);
-    await saveTagOrder(order);
+  let orderChanged = false;
+  const nextOrder = { ...order };
+  if (Array.isArray(nextOrder[p])) {
+    const originalLength = nextOrder[p].length;
+    nextOrder[p] = nextOrder[p].filter((x) => x !== n);
+    if (nextOrder[p].length !== originalLength) {
+      orderChanged = true;
+    }
   }
+
+  // 3. Write all data at the end
+  const promises: Promise<any>[] = [saveTags(nextTags)];
+  if (dirtyWords) {
+    promises.push(saveWords(updatedWords));
+  }
+  if (orderChanged) {
+    promises.push(saveTagOrder(nextOrder));
+  }
+  
+  await Promise.all(promises);
+  
   return nextTags;
 }
 
