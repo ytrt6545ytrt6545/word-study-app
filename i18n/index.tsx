@@ -9,11 +9,9 @@ const dict = {
   'zh-TW': {
     // Tabs
     'tabs.home': '首頁',
-    'tabs.explore': '新增單字',
     'tabs.reading': '閱讀',
     'tabs.words': '單字',
     'tabs.articles': '收藏',
-    'tabs.practice': '練習',
     'tabs.settings': '設定',
 
     // Common
@@ -136,23 +134,6 @@ const dict = {
     'word.confirmDelete.title': '刪除單字',
     'word.confirmDelete.message': '確定刪除「{word}」？',
 
-    // Practice
-    'practice.title': '樣式練習',
-    'practice.previewNote': '上方文字會即時套用設定。',
-    'practice.color': '色值',
-    'practice.fontSize': '字級',
-    'practice.fontFamily': '字體',
-    'practice.shadow': '陰影',
-    'practice.shadowColor': '陰影色值',
-    'practice.offsetX': '水平位移',
-    'practice.offsetY': '垂直位移',
-    'practice.radius': '模糊半徑',
-    'practice.spacing': '間距',
-    'practice.quickColors': '快速選色',
-    'practice.fontSystem': '系統',
-    'practice.fontSerif': '襯線',
-    'practice.fontMono': '等寬',
-
     // Settings
     'settings.title': '設定',
     'settings.dailyLimit': '複習每日上限',
@@ -262,11 +243,9 @@ const dict = {
   },
   en: {
     'tabs.home': 'Home',
-    'tabs.explore': 'Add Word',
     'tabs.reading': 'Reading',
     'tabs.words': 'Words',
     'tabs.articles': 'Library',
-    'tabs.practice': 'Playground',
     'tabs.settings': 'Settings',
 
     'common.cancel': 'Cancel',
@@ -382,23 +361,6 @@ const dict = {
     'word.saved.message': '{word} updated',
     'word.confirmDelete.title': 'Delete Word',
     'word.confirmDelete.message': 'Delete "{word}"?',
-
-    // Practice
-    'practice.title': 'Style Playground',
-    'practice.previewNote': 'Changes apply to the sample text above.',
-    'practice.color': 'Color',
-    'practice.fontSize': 'Font Size',
-    'practice.fontFamily': 'Font Family',
-    'practice.shadow': 'Shadow',
-    'practice.shadowColor': 'Shadow Color',
-    'practice.offsetX': 'Offset X',
-    'practice.offsetY': 'Offset Y',
-    'practice.radius': 'Blur Radius',
-    'practice.spacing': 'Spacing',
-    'practice.quickColors': 'Quick swatches',
-    'practice.fontSystem': 'System',
-    'practice.fontSerif': 'Serif',
-    'practice.fontMono': 'Monospace',
 
     'settings.title': 'Settings',
     'settings.dailyLimit': 'Daily Limits',

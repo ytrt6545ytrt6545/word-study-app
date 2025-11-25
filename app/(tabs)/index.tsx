@@ -28,6 +28,30 @@ function formatBuildDate(raw: string): string {
 
 const MODULE_CARDS = [
   {
+    id: "add",
+    icon: "✨",
+    title: "explore.title",
+    description: "快速新增單字",
+    color: THEME.colors.feature.add,
+    path: "/add",
+  },
+  {
+    id: "reading",
+    icon: "📖",
+    title: "tabs.reading",
+    description: "載入文章並學習",
+    color: THEME.colors.feature.reading,
+    path: "/reading",
+  },
+  {
+    id: "articles",
+    icon: "📚",
+    title: "tabs.articles",
+    description: "檢視已收藏的文章",
+    color: THEME.colors.feature.articles,
+    path: "/(tabs)/articles",
+  },
+  {
     id: "tags",
     icon: "🏷️",
     title: "index.tagsManage",
@@ -59,6 +83,14 @@ const MODULE_CARDS = [
     color: THEME.colors.feature.listening,
     path: "/listening",
   },
+  {
+    id: "settings",
+    icon: "⚙️",
+    title: "tabs.settings",
+    description: "調整應用程式行為",
+    color: THEME.colors.gray[500],
+    path: "/(tabs)/settings",
+  },
 ];
 
 export default function Index() {
@@ -89,15 +121,6 @@ export default function Index() {
         backgroundColor={THEME.colors.primaryLight}
       />
       <ScrollView contentContainerStyle={styles.content}>
-        <Card variant="outlined" style={styles.noticeCard}>
-          <View style={styles.noticeContent}>
-            <Text style={styles.noticeIcon}>💡</Text>
-            <View style={styles.noticeTextWrapper}>
-              <Text style={styles.noticeText}>{t("index.notice")}</Text>
-            </View>
-          </View>
-        </Card>
-
         <Text style={styles.sectionTitle}>📚 {t("index.modules")}</Text>
         <View style={styles.cardGrid}>
           {MODULE_CARDS.map((module) => (
@@ -138,30 +161,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: THEME.spacing.lg,
     paddingTop: THEME.spacing.lg,
     paddingBottom: THEME.spacing.xxxl * 2,
-  },
-  noticeCard: {
-    marginBottom: THEME.spacing.xxl,
-    padding: THEME.spacing.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: THEME.colors.semantic.warning,
-  },
-  noticeContent: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: THEME.spacing.lg,
-  },
-  noticeIcon: {
-    fontSize: 28,
-    marginTop: THEME.spacing.xs,
-  },
-  noticeTextWrapper: {
-    flex: 1,
-  },
-  noticeText: {
-    ...THEME.typography.body,
-    color: THEME.colors.gray[900],
-    lineHeight: 24,
-    fontWeight: "500",
   },
   sectionTitle: {
     ...THEME.typography.h3,

@@ -87,45 +87,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
-        options={{
-          title: t('tabs.explore'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{
-              width: 32,
-              height: 32,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 8,
-              backgroundColor: focused ? '#e8f4f8' : 'transparent',
-            }}>
-              <IconSymbol size={24} name="square.and.pencil" color={color} />
-              {markedTab === 'explore' && (
-                <MaterialIcons name="check-circle" size={14} color="#4CAF50" style={{ position: 'absolute', right: -4, top: -4 }} />
-              )}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="reading"
-        options={{
-          title: t('tabs.reading'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: focused ? '#e8f4f8' : 'transparent',
-            }}>
-              <IconSymbol size={24} name="book.fill" color={color} />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="articles"
         options={{
           title: t('tabs.articles'),
@@ -157,24 +118,6 @@ export default function TabLayout() {
               backgroundColor: focused ? '#e8f4f8' : 'transparent',
             }}>
               <IconSymbol size={24} name="list.bullet" color={color} />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="practice"
-        options={{
-          title: t('tabs.practice'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: focused ? '#e8f4f8' : 'transparent',
-            }}>
-              <IconSymbol size={24} name="slider.horizontal.3" color={color} />
             </View>
           ),
         }}

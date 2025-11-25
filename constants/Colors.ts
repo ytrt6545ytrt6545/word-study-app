@@ -9,6 +9,7 @@ const PRIMARY_LIGHT = '#eef4ff'; // A lighter shade for the new primary blue
 
 // Semantic colors for different features
 const FEATURE_COLORS = {
+  add: '#FFC107',      // Amber for add
   tags: '#2196F3',      // Blue for tags
   review: '#4CAF50',    // Green for review
   exam: '#FF9800',      // Orange for exam
