@@ -93,5 +93,7 @@
     "eval": false,
     "Invoke-Expression": false,
     "iex": false
-  }
+  },
+  "chatgpt.openOnStartup": true,
+  "chatgpt.runCodexInWindowsSubsystemForLinux": true
 }
