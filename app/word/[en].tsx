@@ -5,6 +5,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { bumpReview, loadWords, saveWords, Word, WordStatus, loadTags, toggleWordTag, buildOrderedTagTree, addTag, EXAM_TAG } from "../../utils/storage";
 import { getSpeechOptions } from "../../utils/tts";
 import { useI18n } from "@/i18n";
+import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
+
+const Card = ({ children, style }: { children: React.ReactNode; style?: any }) => <View style={[styles.card, style]}>{children}</View>;
 
 export default function WordDetail() {
   const router = useRouter();
@@ -89,21 +92,22 @@ export default function WordDetail() {
         const isOpen = expanded.has(node.path);
         const checked = (word?.tags || []).includes(node.path);
         return (
-          <View key={node.path} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
-            <Text style={{ width: depth * 14 }} />
-            {hasChildren ? (
-              <Pressable onPress={() => toggleExpand(node.path)}>
-                <Text style={{ width: 18, textAlign: 'center', color: '#555' }}>{isOpen ? '▾' : '▸'}</Text>
+          <View key={node.path} style={{ flexDirection: 'column' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, marginLeft: depth * 14 }}>
+              {hasChildren ? (
+                <Pressable onPress={() => toggleExpand(node.path)} style={{ padding: 2}}>
+                  <MaterialIcons name={isOpen ? 'arrow-drop-down' : 'arrow-right'} size={24} color="#555" />
+                </Pressable>
+              ) : (
+                <View style={{ width: 28 }} />
+              )}
+              <Pressable onPress={() => onToggleTag(node.path, !checked)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <MaterialIcons name={checked ? 'check-box' : 'check-box-outline-blank'} size={24} color={checked ? '#1976d2' : '#888'} />
+                <Text style={styles.tagText}>{node.name}</Text>
               </Pressable>
-            ) : (
-              <Text style={{ width: 18 }} />
-            )}
-            <Pressable onPress={() => onToggleTag(node.path, !checked)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.checkbox, checked && styles.checkboxChecked]} />
-              <Text style={styles.tagText}>{node.name}</Text>
-            </Pressable>
+            </View>
             {hasChildren && isOpen && (
-              <View style={{ width: '100%' }}>
+              <View>
                 {renderTagTree(node.children || [], depth + 1)}
               </View>
             )}
@@ -192,120 +196,263 @@ export default function WordDetail() {
 
   if (!word)
     return (
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }}>
+      <View style={styles.container}>
         <Text style={styles.title}>{"載入中..."}</Text>
-      </ScrollView>
+      </View>
     );
 
+  const statusOptions: { key: WordStatus; label: string; icon: React.ComponentProps<typeof FontAwesome>['name'] }[] = [
+    { key: "unknown", label: "新字", icon: 'question-circle' },
+    { key: "learning", label: "學習中", icon: 'graduation-cap' },
+    { key: "mastered", label: "已掌握", icon: 'check-circle' },
+  ]
+
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
-      <Text style={styles.title}>{word.en}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -6, marginBottom: 6 }}>
-        { (word.tags || []).includes(EXAM_TAG) ? (
-          <Button title={'移除考試標籤'} onPress={() => onToggleTag(EXAM_TAG, false)} />
-        ) : (
-          <Button title={'加入考試標籤'} onPress={() => onToggleTag(EXAM_TAG, true)} />
-        ) }
-      </View>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaText}>{t('word.createdAt', { date: formatYMD(word.createdAt) })}</Text>
-        <Text style={styles.metaTextStrong}>{t('word.reviewCount', { count: (word.reviewCount || 0).toString() })}</Text>
-      </View>
-
-      <Text style={styles.label}>{t('word.zh')}</Text>
-      <TextInput
-        style={[styles.input, styles.inputMultiline, { height: zhHeight }]}
-        value={zh}
-        onChangeText={setZh}
-        placeholder={"中文翻譯"}
-        multiline
-        scrollEnabled={false}
-        onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
-      />
-
-      <Text style={styles.label}>{t('word.exEn')}</Text>
-      <TextInput
-        style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
-        value={exampleEn}
-        onChangeText={setExampleEn}
-        placeholder={"英文例句"}
-        multiline
-        scrollEnabled={false}
-        onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
-      />
-
-      <Text style={styles.label}>{t('word.exZh')}</Text>
-      <TextInput
-        style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
-        value={exampleZh}
-        onChangeText={setExampleZh}
-        placeholder={"例句中文翻譯"}
-        multiline
-        scrollEnabled={false}
-        onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
-      />
-
-      <Pressable onPress={() => setStatus(status === "unknown" ? "learning" : status === "learning" ? "mastered" : "unknown")}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
+      <Card>
+        <View style={styles.wordHeader}>
+            <Text style={styles.title}>{word.en}</Text>
+            <Pressable onPress={onListen} disabled={listening} style={styles.listenButton}>
+                <MaterialIcons name="volume-up" size={32} color={listening ? "#ccc" : "#1976d2"} />
+            </Pressable>
+        </View>
+        <TextInput
+            style={[styles.input, styles.inputMultiline, { height: zhHeight, marginTop: 8 }]}
+            value={zh}
+            onChangeText={setZh}
+            placeholder={"中文翻譯"}
+            multiline
+            scrollEnabled={false}
+            onContentSizeChange={(e) => setZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+        />
+        <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <FontAwesome name="calendar-o" size={13} color="#666" />
+              <Text style={styles.metaText}>{t('word.createdAt', { date: formatYMD(word.createdAt) })}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <MaterialIcons name="reviews" size={14} color="#666" />
+              <Text style={styles.metaTextStrong}>{t('word.reviewCount', { count: (word.reviewCount || 0).toString() })}</Text>
+            </View>
+        </View>
+      </Card>
+      
+      <Card>
         <Text style={styles.label}>{t('word.familiarity')}</Text>
-        <View style={styles.pillRow}>
-          <View style={[styles.dot, status === "unknown" && styles.dotRed]} />
-          <View style={[styles.dot, status === "learning" && styles.dotYellow]} />
-          <View style={[styles.dot, status === "mastered" && styles.dotGreen]} />
+        <View style={styles.statusContainer}>
+            {statusOptions.map(opt => (
+                <Pressable key={opt.key} style={[styles.statusButton, status === opt.key && styles.statusButtonSelected]} onPress={() => setStatus(opt.key)}>
+                    <FontAwesome name={opt.icon} size={16} color={status === opt.key ? "#fff" : "#555"} />
+                    <Text style={[styles.statusButtonText, status === opt.key && styles.statusButtonTextSelected]}>{opt.label}</Text>
+                </Pressable>
+            ))}
         </View>
-      </Pressable>
+      </Card>
 
-      <Pressable onPress={() => setTagsExpanded((v) => !v)}>
-        <Text style={styles.label}>{t('word.tags')}</Text>
-      </Pressable>
-      {tagsExpanded && (
-        <View style={styles.tagsList}>
-          {renderTagTree(tagTree)}
-          {tagTree.length === 0 && <Text style={styles.hint}>{t('word.tags.none')}</Text>}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-            <TextInput style={[styles.input, { flex: 1, marginRight: 6 }]} value={newTagText} onChangeText={setNewTagText} placeholder={'輸入新標籤（可含層級，如 A > B > C）'} />
-            <Button title={'新增並勾選'} onPress={async () => {
-              const name = newTagText.trim();
-              if (!name || !word) return;
-              await addTag(name);
-              await toggleWordTag(word.en, name, true);
-              setNewTagText("");
-              const list = await loadWords();
-              const found = list.find((w) => w.en.toLowerCase() === word.en.toLowerCase());
-              if (found) setWord(found);
-              setTags(await loadTags());
-            }} />
-          </View>
-        </View>
-      )}
+      <Card>
+        <Text style={styles.label}>{t('word.exEn')}</Text>
+        <TextInput
+            style={[styles.input, styles.inputMultiline, { height: exEnHeight }]}
+            value={exampleEn}
+            onChangeText={setExampleEn}
+            placeholder={"英文例句"}
+            multiline
+            scrollEnabled={false}
+            onContentSizeChange={(e) => setExEnHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+        />
+
+        <Text style={[styles.label, { marginTop: 16 }]}>{t('word.exZh')}</Text>
+        <TextInput
+            style={[styles.input, styles.inputMultiline, { height: exZhHeight }]}
+            value={exampleZh}
+            onChangeText={setExampleZh}
+            placeholder={"例句中文翻譯"}
+            multiline
+            scrollEnabled={false}
+            onContentSizeChange={(e) => setExZhHeight(Math.max(40, e.nativeEvent.contentSize.height))}
+        />
+      </Card>
+
+      <Card>
+        <Pressable onPress={() => setTagsExpanded((v) => !v)} style={styles.cardHeader}>
+            <Text style={styles.label}>{t('word.tags')}</Text>
+            <MaterialIcons name={tagsExpanded ? 'expand-less' : 'expand-more'} size={28} color="#555" />
+        </Pressable>
+        {tagsExpanded && (
+            <View style={styles.tagsList}>
+            {renderTagTree(tagTree)}
+            {tagTree.length === 0 && <Text style={styles.hint}>{t('word.tags.none')}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 8 }}>
+                <TextInput style={[styles.input, { flex: 1 }]} value={newTagText} onChangeText={setNewTagText} placeholder={'輸入新標籤...'} />
+                <Button title={'新增並勾選'} onPress={async () => {
+                    const name = newTagText.trim();
+                    if (!name || !word) return;
+                    await addTag(name);
+                    await toggleWordTag(word.en, name, true);
+                    setNewTagText("");
+                    await refreshWordFromStorage();
+                    setTags(await loadTags());
+                }} />
+            </View>
+            </View>
+        )}
+      </Card>
 
       <View style={styles.rowButtons}>
-        <Button title={listening ? t('word.playing') : t('word.play')} onPress={onListen} disabled={listening} />
-        <Button title={t('word.save')} onPress={save} />
-        <Button title={t('word.delete')} color="#c62828" onPress={remove} />
+        <Pressable style={[styles.actionButton, styles.saveButton]} onPress={save}>
+            <MaterialIcons name="save" size={20} color="#fff" />
+            <Text style={styles.actionButtonText}>{t('word.save')}</Text>
+        </Pressable>
+        <Pressable style={[styles.actionButton, styles.deleteButton]} onPress={remove}>
+            <MaterialIcons name="delete" size={20} color="#fff" />
+            <Text style={styles.actionButtonText}>{t('word.delete')}</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 12 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: -6, marginBottom: 8 },
-  metaText: { fontSize: 12, color: "#666" },
-  metaTextStrong: { fontSize: 12, color: "#c62828" },
-  label: { marginTop: 12, marginBottom: 6, fontSize: 14, color: "#333" },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 6, backgroundColor: "#fff", width: "100%" },
-  inputMultiline: { textAlignVertical: "top" as const },
-  rowButtons: { flexDirection: "row", gap: 10, marginTop: 16 },
-  tagsList: { marginTop: 8, gap: 8 },
-  tagRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
-  checkbox: { width: 18, height: 18, borderWidth: 1, borderColor: "#888", marginRight: 8, borderRadius: 3, backgroundColor: "#fff" },
-  checkboxChecked: { backgroundColor: "#1976d2", borderColor: "#1976d2" },
-  tagText: { fontSize: 14 },
-  hint: { color: "#777" },
-  pillRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
-  dot: { width: 18, height: 18, borderRadius: 9, marginRight: 8, backgroundColor: "#ddd", borderWidth: 1, borderColor: "#bbb" },
-  dotRed: { backgroundColor: "#f44336" },
-  dotYellow: { backgroundColor: "#ffb300" },
-  dotGreen: { backgroundColor: "#43a047" },
+  container: { 
+    flex: 1, 
+    backgroundColor: "#f5f5f5" 
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    marginHorizontal: 16,
+    marginTop: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  wordHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  title: { 
+    fontSize: 34, 
+    fontWeight: "bold",
+    color: "#212121",
+    flex: 1,
+  },
+  listenButton: {
+    padding: 8,
+  },
+  metaRow: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: 16, 
+    marginTop: 12 
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  metaText: { 
+    fontSize: 13, 
+    color: "#666" 
+  },
+  metaTextStrong: { 
+    fontSize: 13, 
+    color: "#c62828",
+    fontWeight: "bold"
+  },
+  label: { 
+      fontSize: 18, 
+      fontWeight: '600',
+      color: "#333",
+      marginBottom: 10,
+  },
+  input: { 
+    borderWidth: 1, 
+    borderColor: "#e0e0e0", 
+    padding: 12, 
+    borderRadius: 8, 
+    backgroundColor: "#f9f9f9", 
+    width: "100%",
+    fontSize: 16,
+  },
+  inputMultiline: { 
+    textAlignVertical: "top" 
+  },
+  rowButtons: { 
+    flexDirection: "row", 
+    gap: 12, 
+    marginTop: 32,
+    marginHorizontal: 16,
+  },
+  tagsList: { 
+    marginTop: 12, 
+    gap: 2 
+  },
+  tagText: { 
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  hint: { 
+    color: "#777",
+    paddingVertical: 8,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 8,
+  },
+  statusButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
+    gap: 8,
+  },
+  statusButtonSelected: {
+    backgroundColor: '#1976d2',
+    borderColor: '#1976d2',
+  },
+  statusButtonText: {
+    fontSize: 14,
+    color: '#555',
+    fontWeight: '600',
+  },
+  statusButtonTextSelected: {
+    color: '#fff',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    gap: 10,
+  },
+  saveButton: {
+    backgroundColor: '#43a047',
+  },
+  deleteButton: {
+    backgroundColor: '#d32f2f',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  }
 });

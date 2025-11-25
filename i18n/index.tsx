@@ -11,6 +11,7 @@ const dict = {
     'tabs.home': '首頁',
     'tabs.reading': '閱讀',
     'tabs.words': '單字',
+    'tabs.listening': '單字聽力',
     'tabs.articles': '收藏',
     'tabs.settings': '設定',
 
@@ -245,6 +246,7 @@ const dict = {
     'tabs.home': 'Home',
     'tabs.reading': 'Reading',
     'tabs.words': 'Words',
+    'tabs.listening': 'Listening',
     'tabs.articles': 'Library',
     'tabs.settings': 'Settings',
 

@@ -123,6 +123,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="listening"
+        options={{
+          title: t('tabs.listening'),
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              backgroundColor: focused ? '#e8f4f8' : 'transparent',
+            }}>
+              <IconSymbol size={24} name="headphones" color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: t('tabs.settings'),

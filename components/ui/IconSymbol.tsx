@@ -20,6 +20,7 @@ const MAPPING = {
   'book.fill': 'book',
   'bookmark.fill': 'bookmark',
   'list.bullet': 'format-list-bulleted',
+  'headphones': 'headset',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'gearshape.fill': 'settings',
