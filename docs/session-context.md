@@ -172,3 +172,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - `app/(tabs)/reading.tsx` 引入 `onStopReading` 控制與完整工具列文案，朗讀停止會重置狀態，控制按鈕改以 i18n 字串顯示。
 - 重新執行 `./gradlew.bat assembleRelease` 產出最新 APK，路徑為 `android/app/build/outputs/apk/release/app-release.apk`。
 - 持續追蹤 `types/chinese-conv.d.ts` 編碼異常；目前 `npx tsc --noEmit` 仍因 Invalid character 失敗，需確認來源檔案或重新產生型別。
+
+## 2025-11-25 工作紀錄（本次）
+- `android/app/build.gradle` 加入自動注入 `EXPO_PUBLIC_BUILD_DATE`，每次 bundle/assemble 時自動帶入 UTC ISO 時間，首頁可顯示最新建置日期。
+- 遇到舊 `.gradle-cache` transforms 搬移失敗（immutable 路徑鎖檔）；改用新 cache 路徑 `GRADLE_USER_HOME=C:\temp\gradle-cache-20251101` 並清除舊 Daemon 後，重新下載 Gradle 8.13 並成功完成 `./gradlew.bat assembleRelease`。
+- 目前最新 APK：`android/app/build/outputs/apk/release/app-release.apk`（約 90 MB）。首次冷 cache 耗時較久（約 17 分鐘）因需重建 transforms/CMake 多 ABI；同一 cache 下次會快很多。
+- 建置前建議流程：跑 `scripts/setup-android-build-env.ps1`，確認 `GRADLE_USER_HOME=C:\temp\gradle-cache-20251101`、`ANDROID_PREFAB_HOME=C:\temp\android-prefab`、`TEMP/TMP=C:\temp`，必要時 `./gradlew.bat --stop` 清 Daemon 再組建。
