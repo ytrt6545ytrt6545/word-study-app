@@ -183,3 +183,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - 執行 `npx expo run:android --variant debug`（必要時先 `./gradlew.bat --stop`），完成後自動安裝 debug APK 並啟動開發客戶端，Metro 指向 127.0.0.1:8081。
 - 若手機連不上 Metro，另開終端機跑 `adb reverse tcp:8081 tcp:8081`，回 App 按 r 或 dev menu reload。
 - 快速流程：1) 套 env 2) adb device 3) 可選 --stop 4) `npx expo run:android --variant debug` 5) 測 release：`adb install -r android/app/build/outputs/apk/release/app-release.apk`（必要時先 `adb uninstall com.bwcyst.chiwordstudy`）。
+
+## 本次會話紀錄（2025-11-26，本次）
+- 手機 USB 連線，執行 `npx expo run:android --variant debug`，Metro 指向 127.0.0.1:8081，已能熱重載。
+- 首頁功能模組區下方新增文字「這是測試」；首頁建構日期改為固定顯示 `2025/11/26`（`app/(tabs)/index.tsx`，不再讀 env）。
+- 若手機顯示 Waiting for Debugger，關閉系統「等待偵錯」、必要時 `adb uninstall com.bwcyst.chiwordstudy` 後再跑 `npx expo run:android --variant debug`。
