@@ -178,3 +178,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - 遇到舊 `.gradle-cache` transforms 搬移失敗（immutable 路徑鎖檔）；改用新 cache 路徑 `GRADLE_USER_HOME=C:\temp\gradle-cache-20251101` 並清除舊 Daemon 後，重新下載 Gradle 8.13 並成功完成 `./gradlew.bat assembleRelease`。
 - 目前最新 APK：`android/app/build/outputs/apk/release/app-release.apk`（約 90 MB）。首次冷 cache 耗時較久（約 17 分鐘）因需重建 transforms/CMake 多 ABI；同一 cache 下次會快很多。
 - 建置前建議流程：跑 `scripts/setup-android-build-env.ps1`，確認 `GRADLE_USER_HOME=C:\temp\gradle-cache-20251101`、`ANDROID_PREFAB_HOME=C:\temp\android-prefab`、`TEMP/TMP=C:\temp`，必要時 `./gradlew.bat --stop` 清 Daemon 再組建。
+## 2025-11-26 工作紀錄
+- USB 連線開發：先跑 `scripts/setup-android-build-env.ps1` 套 env（SDK/TMP/GRADLE ASCII 路徑），`adb devices` 確認 device。
+- 執行 `npx expo run:android --variant debug`（必要時先 `./gradlew.bat --stop`），完成後自動安裝 debug APK 並啟動開發客戶端，Metro 指向 127.0.0.1:8081。
+- 若手機連不上 Metro，另開終端機跑 `adb reverse tcp:8081 tcp:8081`，回 App 按 r 或 dev menu reload。
+- 快速流程：1) 套 env 2) adb device 3) 可選 --stop 4) `npx expo run:android --variant debug` 5) 測 release：`adb install -r android/app/build/outputs/apk/release/app-release.apk`（必要時先 `adb uninstall com.bwcyst.chiwordstudy`）。

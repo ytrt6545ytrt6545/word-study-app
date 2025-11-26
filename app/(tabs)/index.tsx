@@ -102,16 +102,8 @@ export default function Index() {
     ...((Constants.manifestExtra as any) ?? {}),
     ...((Constants.expoConfig as any)?.extra ?? {}),
   };
-  const configDate: string | undefined = typeof extra.buildDate === "string" ? extra.buildDate : undefined;
-  const envDate = process.env.EXPO_PUBLIC_BUILD_DATE;
-  const rawDate =
-    envDate ||
-    configDate ||
-    ((typeof __DEV__ !== "undefined" && __DEV__) ? new Date().toISOString().slice(0, 10) : "");
-  const buildDate = rawDate ? formatBuildDate(rawDate) : "";
-  const buildDateLabel = buildDate
-    ? t("index.lastUpdated", { date: buildDate })
-    : t("index.lastUpdated.missing");
+  const buildDate = "2025/11/26";
+  const buildDateLabel = t("index.lastUpdated", { date: buildDate });
 
   return (
     <View style={styles.container}>
@@ -147,6 +139,7 @@ export default function Index() {
             </Pressable>
           ))}
         </View>
+        <Text style={styles.quickNote}>這是測試</Text>
       </ScrollView>
     </View>
   );
@@ -167,6 +160,11 @@ const styles = StyleSheet.create({
     color: THEME.colors.gray[900],
     marginBottom: THEME.spacing.lg,
     marginTop: THEME.spacing.lg,
+  },
+  quickNote: {
+    ...THEME.typography.body,
+    color: THEME.colors.gray[700],
+    marginTop: THEME.spacing.md,
   },
   cardGrid: {
     gap: THEME.spacing.lg,
