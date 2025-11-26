@@ -188,3 +188,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - 手機 USB 連線，執行 `npx expo run:android --variant debug`，Metro 指向 127.0.0.1:8081，已能熱重載。
 - 首頁功能模組區下方新增文字「這是測試」；首頁建構日期改為固定顯示 `2025/11/26`（`app/(tabs)/index.tsx`，不再讀 env）。
 - 若手機顯示 Waiting for Debugger，關閉系統「等待偵錯」、必要時 `adb uninstall com.bwcyst.chiwordstudy` 後再跑 `npx expo run:android --variant debug`。
+
+## 2025-11-27 工作紀錄
+- USB 開發端曾出現 Global was not installed / Bundling 卡在 33% 的錯誤，已重置 Metro cache 並重新啟動 dev client，問題已解除（取代先前 Metro 連線失敗紀錄）。
+- 處理方式：確認 8081 佔用並關閉舊 node，使用 Start-Process 背景啟動 """"npx expo start --dev-client --port 8081 --reset-cache --non-interactive""""，並重新執行 adb reverse。
+- 驗證：""""http://127.0.0.1:8081/status"""" 回應 200，手機 Dev Client Reload 後可正常載入。
+- 後續若再卡住：檢查 8081 佔用 (""""netstat -ano | Select-String ':8081'"""" )，結束舊 node，重新啟動 Metro（帶 --reset-cache）並執行 """"adb reverse tcp:8081 tcp:8081""""。
+- 修復 `app/reading.tsx` 開頭註解把 `export default function ReadingScreen` 向外推移的語法錯誤，避免函式宣告被註解包住、導致 JSX `return` 跑出函式外的 build fail；在修改後再次 `npm run start` / Expo Web 可正常啟動。

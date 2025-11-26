@@ -1,9 +1,10 @@
-import * as DocumentPicker from 'expo-document-picker';
+﻿import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as Speech from 'expo-speech';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { Alert, Button, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/i18n';
 import { aiCompleteWord, AIFillResult, recognizeImageText } from '@/utils/ai';
@@ -11,14 +12,7 @@ import { createArticle, getArticleById, loadArticleTags, saveArticleTags } from 
 import { addTag, loadTags, loadWords, normalizeTagPath, REVIEW_TAG, saveWords, Word } from '@/utils/storage';
 import { getSpeechOptions, loadPauseConfig } from '@/utils/tts';
 
-// 閱讀頁面：整合文章顯示、圖像 OCR 匯入、單字查詢與收藏標籤。
-// 主要工作流程：
-// 1. 依 `articleId` 載入既有文章，或接受使用者貼上的原文。
-// 2. 透過 `DocumentPicker` + `recognizeImageText` 將圖片轉成文字並注入閱讀區。
-// 3. 將點選的單字送往 AI 取得翻譯、音標、例句，並提供加入字庫的動作。
-// 4. 協助建立/選取標籤與收藏，再同步寫入 AsyncStorage。
-// 5. 文章與標籤會回寫至 `utils/articles` 與 `utils/storage`，讓收藏庫與備份流程讀到一致資料。
-type TokenKind = 'en' | 'zh' | 'number' | 'newline' | 'other';
+// ?梯??嚗??蝡＊蝷箝???OCR ?臬?摮閰Ｚ??嗉?璅惜??// 銝餉?撌乩?瘚?嚗?// 1. 靘?`articleId` 頛?Ｘ???嚗??亙?雿輻?票銝?????// 2. ?? `DocumentPicker` + `recognizeImageText` 撠?????摮蒂瘜典?梯????// 3. 撠??貊??桀??? AI ??蝧餉陌?璅??伐?銝行?靘??亙?摨怎?????// 4. ?撱箇?/?詨?璅惜?????甇亙神??AsyncStorage??// 5. ????蝐斗??神??`utils/articles` ??`utils/storage`嚗??嗉?摨怨??遢瘚?霈?唬??渲???type TokenKind = 'en' | 'zh' | 'number' | 'newline' | 'other';
 type Token = { key: string; text: string; kind: TokenKind };
 type ReadingChunk = {
   text: string;
@@ -35,13 +29,13 @@ const NETWORK_ERROR_RE = /Failed to fetch|Network request failed|NetworkError/i;
 const normalizeNumberForSpeech = (value: string): string => {
   const replacements: Record<string, string> = {
     '，': ',',
-    '．': '.',
     '。': '.',
+    '、': ',',
     '：': ':',
     '／': '/',
     '％': '%',
     '－': '-',
-    '—': '-',
+    '–': '-',
     '＋': '+',
     '﹣': '-',
     '﹢': '+',
@@ -59,15 +53,14 @@ const normalizeNumberForSpeech = (value: string): string => {
     .join('');
 };
 
-// 將貼上的長文拆解成英文、中文、數字與其他標記，方便後續渲染與語音朗讀。
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   if (!text) return tokens;
   const isEnStart = (ch: string) => /[A-Za-z]/.test(ch);
   const isEnBody = (ch: string) => /[A-Za-z0-9'-]/.test(ch);
-  const isZhChar = (ch: string) => /[㐀-鿿一-鿿豈-﫿]/.test(ch);
-  const isNumberStart = (ch: string) => /[0-9０-９]/.test(ch);
-  const isNumberBody = (ch: string) => /[0-9０-９,，.．:：/／%％\-－+＋]/.test(ch);
+  const isZhChar = (ch: string) => /[\u4e00-\u9fff]/.test(ch);
+  const isNumberStart = (ch: string) => /[0-9\uFF10-\uFF19]/.test(ch);
+  const isNumberBody = (ch: string) => /[0-9\uFF10-\uFF19.,%％+＋\\-－–]/.test(ch);
 
   let i = 0;
   let seq = 0;
@@ -196,9 +189,10 @@ const sortTagsWithReviewFirst = (tags: Iterable<string | null | undefined>): str
   return list;
 };
 
-// 閱讀畫面主元件：處理文章載入、朗讀設定、AI 查詢結果與收藏互動。
+// ?梯??恍銝餃?隞塚?????頛??霈閮剖??I ?亥岷蝯??????
 export default function ReadingScreen() {
   const { t, locale } = useI18n();
+  const insets = useSafeAreaInsets();
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [customTitle, setCustomTitle] = useState<string>('');
@@ -212,6 +206,7 @@ export default function ReadingScreen() {
   const [tagDraftError, setTagDraftError] = useState<string | null>(null);
   const [articleSaving, setArticleSaving] = useState(false);
   const [articleNotice, setArticleNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [showPreviewOnly, setShowPreviewOnly] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   // Reading controls
   const [isReading, setIsReading] = useState(false);
@@ -224,6 +219,8 @@ export default function ReadingScreen() {
     index: 0,
     chunks: [],
   });
+  // ?踹??瑟?頛詨???頝?tokenization ???⊿?
+  const deferredRawText = useDeferredValue(rawText);
   const params = useLocalSearchParams<{ articleId?: string | string[] }>();
   const articleIdParam = useMemo(() => {
     const value = params.articleId;
@@ -275,13 +272,19 @@ export default function ReadingScreen() {
     }
   }, [selectedKey]);
 
-  const tokens = useMemo(() => tokenize(rawText), [rawText]);
+  const tokens = useMemo(() => tokenize(deferredRawText), [deferredRawText]);
   const selectedTagsLabel = useMemo(() => selectedTags.join('、'), [selectedTags]);
+  const previewText = useMemo(() => {
+    const trimmed = rawText.trim();
+    if (!trimmed) return '';
+    const limit = 240;
+    return trimmed.length <= limit ? trimmed : `${trimmed.slice(0, limit)} …`;
+  }, [rawText]);
   const readingMeta = useMemo(() => {
     const chunks: ReadingChunk[] = [];
     const chunkIndexByToken: Record<string, number | undefined> = Object.create(null);
-    const sentencePattern = /[\.!?;:。！？；：]/;
-    const commaPattern = /[，,、]/;
+    const sentencePattern = /[\.!\?;:。！？；：]/;
+    const commaPattern = /[,，、]/;
     const inferNumberLang = (idx: number): 'en' | 'zh' => {
       const scan = (direction: -1 | 1) => {
         let cursor = idx + direction;
@@ -379,6 +382,7 @@ export default function ReadingScreen() {
     runnerRef.current.paused = false;
     runnerRef.current.index = 0;
     runnerRef.current.chunks = [];
+    setShowPreviewOnly(false);
     setRawText('');
     setFileName(null);
     setCustomTitle('');
@@ -644,14 +648,14 @@ export default function ReadingScreen() {
     try {
       const list = await loadWords();
       if (list.some((w) => w.en.toLowerCase() === payload.en.toLowerCase())) {
-        setFeedback({ type: 'info', text: `${payload.en} 已在清單` });
+        setFeedback({ type: 'info', text: `${payload.en} 已存在清單` });
         return;
       }
       const next = [...list, payload];
       await saveWords(next);
-      setFeedback({ type: 'success', text: `${payload.en} 已加入清單` });
+      setFeedback({ type: 'success', text: `${payload.en} 已新增` });
     } catch (err: any) {
-      setFeedback({ type: 'error', text: err?.message || '加入失敗，請稍後再試' });
+      setFeedback({ type: 'error', text: err?.message || '加入單字時發生錯誤' });
     }
   };
 
@@ -779,6 +783,7 @@ export default function ReadingScreen() {
       const chunks = runnerRef.current.chunks;
 
       while (runnerRef.current.index < chunks.length) {
+        if (!runnerRef.current.running) break;
         if (runnerRef.current.paused) {
           await wait(120);
           continue;
@@ -824,13 +829,14 @@ export default function ReadingScreen() {
       if (runnerRef.current.index >= runnerRef.current.chunks.length) {
         setIsReading(false);
         setIsPaused(false);
+        setShowPreviewOnly(false);
       }
     }
   }, [speakAsync, wait]);
 
   const onStartReading = useCallback(async () => {
     if (readingMeta.chunks.length === 0) {
-      Alert.alert('朗讀', '請先貼上或輸入文章內容');
+      Alert.alert(t('reading.section.article'), t('reading.saveArticle.empty'));
       return;
     }
     try { Speech.stop(); } catch {}
@@ -841,6 +847,7 @@ export default function ReadingScreen() {
     setReadingEndIndex(0);
     setIsReading(true);
     setIsPaused(false);
+    setShowPreviewOnly(true);
     runReading();
   }, [readingMeta.chunks, runReading]);
 
@@ -865,14 +872,55 @@ export default function ReadingScreen() {
     runnerRef.current.running = false;
     setIsReading(false);
     setIsPaused(false);
+    setShowPreviewOnly(false);
     setReadingIndex(-1);
     setReadingEndIndex(-1);
     try { Speech.stop(); } catch {}
   }, [isReading]);
 
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        runnerRef.current.paused = false;
+        runnerRef.current.running = false;
+        runnerRef.current.index = runnerRef.current.chunks.length;
+        runnerRef.current.chunks = [];
+        try { Speech.stop(); } catch {}
+        setIsReading(false);
+        setIsPaused(false);
+        setReadingIndex(-1);
+        setReadingEndIndex(-1);
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    return () => {
+      runnerRef.current.paused = false;
+      runnerRef.current.running = false;
+      runnerRef.current.index = runnerRef.current.chunks.length;
+      runnerRef.current.chunks = [];
+      try { Speech.stop(); } catch {}
+      setIsReading(false);
+      setIsPaused(false);
+      setShowPreviewOnly(false);
+      setReadingIndex(-1);
+      setReadingEndIndex(-1);
+    };
+  }, []);
+
+  // ?踹?鋡怠???Tab 閬?嚗??拙漲銝楠蝛粹?
+  const bottomInsetPadding = useMemo(() => Math.max(64, insets.bottom + 64), [insets.bottom]);
+  const toolbarPaddingBottom = useMemo(() => Math.max(12, insets.bottom + 8), [insets.bottom]);
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: bottomInsetPadding }}
+        contentInset={{ bottom: bottomInsetPadding }}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
+      >
         {!!fileName && <Text style={styles.fileName}>{t('reading.file.from', { name: fileName })}</Text>}
         <View style={styles.metaSection}>
           <Text style={styles.metaLabel}>{t('reading.articleTitle.label')}</Text>
@@ -884,6 +932,7 @@ export default function ReadingScreen() {
             maxLength={120}
           />
         </View>
+
         <View style={styles.actionRow}>
           <Pressable
             style={styles.actionButton}
@@ -896,14 +945,14 @@ export default function ReadingScreen() {
             onPress={onPickImage}
             disabled={ocrLoading}
           >
-            <Text style={styles.actionButtonText}>{ocrLoading ? '⏳' : '🖼️'} {ocrLoading ? t('reading.ocr.loading') : t('reading.toolbar.pickImage')}</Text>
+            <Text style={styles.actionButtonText}>{ocrLoading ? t('reading.ocr.loading') : `🖼️ ${t('reading.toolbar.pickImage')}`}</Text>
           </Pressable>
           <Pressable
             style={[styles.actionButton, (!rawText && !fileName) && styles.actionButtonDisabled]}
             onPress={onClearArticle}
             disabled={!rawText && !fileName}
           >
-            <Text style={styles.actionButtonText}>🗑️ {t('reading.toolbar.clear')}</Text>
+            <Text style={styles.actionButtonText}>🧹 {t('reading.toolbar.clear')}</Text>
           </Pressable>
         </View>
         <Pressable
@@ -955,7 +1004,7 @@ export default function ReadingScreen() {
               style={styles.tagAddButton}
               onPress={onAddNewTag}
             >
-              <Text style={styles.tagAddButtonText}>➕</Text>
+              <Text style={styles.tagAddButtonText}>+</Text>
             </Pressable>
           </View>
           {tagDraftError ? <Text style={styles.newTagError}>{tagDraftError}</Text> : null}
@@ -977,61 +1026,68 @@ export default function ReadingScreen() {
 
         {tokens.length === 0 && rawText.trim() === '' && (
           <View style={styles.emptyStateContainer}>
-            <Text style={styles.emptyStateIcon}>📖</Text>
+            <Text style={styles.emptyStateIcon}>📄</Text>
             <Text style={styles.emptyStateTitle}>{t('reading.placeholder.hint')}</Text>
-            <Text style={styles.emptyStateSubtitle}>上傳文件或貼上文章內容，然後點選單字查詢</Text>
+            <Text style={styles.emptyStateSubtitle}>貼上或匯入文章內容，然後開始朗讀與標記。</Text>
           </View>
         )}
         {tokens.length > 0 && (
           <View style={styles.articleSection}>
             <Text style={styles.sectionTitle}>{t('reading.section.article')}</Text>
-            <View style={styles.articleBox}>
-              <Text style={styles.articleText}>
-                {tokens.map((token) => {
-                  const chunkIdx = readingMeta.chunkIndexByToken[token.key];
-                  const isActive = isReading && typeof chunkIdx === 'number' && chunkIdx >= readingIndex && chunkIdx < readingEndIndex;
+            {showPreviewOnly ? (
+              <View style={styles.previewBox}>
+                <Text style={styles.previewHint}>朗讀中，暫時顯示摘要</Text>
+                <Text style={styles.articleText}>{previewText}</Text>
+              </View>
+            ) : (
+              <View style={styles.articleBox}>
+                <Text style={styles.articleText}>
+                  {tokens.map((token) => {
+                    const chunkIdx = readingMeta.chunkIndexByToken[token.key];
+                    const isActive = isReading && typeof chunkIdx === 'number' && chunkIdx >= readingIndex && chunkIdx < readingEndIndex;
 
-                  if (token.kind === 'en') {
+                    if (token.kind === 'en') {
+                      return (
+                        <Text
+                          key={token.key}
+                          style={[styles.word, isActive && styles.wordActive]}
+                          onPress={() => onSelectWord(token)}
+                          suppressHighlighting>
+                          {token.text}
+                        </Text>
+                      );
+                    }
+
+                    if (token.kind === 'zh') {
+                      return (
+                        <Text key={token.key} style={[styles.wordZh, isActive && styles.wordActive]}>
+                          {token.text}
+                        </Text>
+                      );
+                    }
+                    if (token.kind === 'number') {
+                      return (
+                        <Text key={token.key} style={[styles.word, isActive && styles.wordActive]}>
+                          {token.text}
+                        </Text>
+                      );
+                    }
+
                     return (
-                      <Text
-                        key={token.key}
-                        style={[styles.word, isActive && styles.wordActive]}
-                        onPress={() => onSelectWord(token)}
-                        suppressHighlighting>
+                      <Text key={token.key} style={styles.nonWord}>
                         {token.text}
                       </Text>
                     );
-                  }
-
-                  if (token.kind === 'zh') {
-                    return (
-                      <Text key={token.key} style={[styles.wordZh, isActive && styles.wordActive]}>
-                        {token.text}
-                      </Text>
-                    );
-                  }
-                  if (token.kind === 'number') {
-                    return (
-                      <Text key={token.key} style={[styles.word, isActive && styles.wordActive]}>
-                        {token.text}
-                      </Text>
-                    );
-                  }
-
-                  return (
-                    <Text key={token.key} style={styles.nonWord}>
-                      {token.text}
-                    </Text>
-                  );
-                })}
-              </Text>
-            </View>
+                  })}
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
 
       {/* Toolbar */}
-      <View style={styles.toolbar}>
+      <View style={[styles.toolbar, { paddingBottom: toolbarPaddingBottom }]}>
         <Pressable
           style={[styles.toolbarButton, (isReading && !isPaused) && styles.toolbarButtonDisabled]}
           onPress={onStartReading}
@@ -1051,7 +1107,7 @@ export default function ReadingScreen() {
           onPress={onResumeReading}
           disabled={!isReading || !isPaused}
         >
-          <Text style={styles.toolbarButtonText}>▶️ {t('reading.controls.resume')}</Text>
+          <Text style={styles.toolbarButtonText}>⏯️ {t('reading.controls.resume')}</Text>
         </Pressable>
         <Pressable
           style={[styles.toolbarButton, !isReading && styles.toolbarButtonDisabled]}
@@ -1155,7 +1211,9 @@ const styles = StyleSheet.create({
   articleSection: { marginTop: 24, gap: 12, marginHorizontal: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
   articleBox: { marginTop: 8, padding: 16, borderWidth: 2, borderColor: '#ddd', borderRadius: 14, backgroundColor: '#fff' },
+  previewBox: { marginTop: 8, padding: 16, borderWidth: 2, borderColor: '#cde7f6', borderRadius: 14, backgroundColor: '#f4fbff', gap: 8 },
   articleText: { fontSize: 18, lineHeight: 28, color: '#1a1a1a' },
+  previewHint: { fontSize: 13, color: '#0a7ea4' },
   word: { color: '#0a7ea4', fontWeight: '600' },
   wordZh: { color: '#4CAF50', fontWeight: '600' },
   wordActive: { backgroundColor: '#ffecb3', borderRadius: 6, paddingHorizontal: 2 },
@@ -1214,3 +1272,4 @@ const styles = StyleSheet.create({
   modalCloseButtonText: { color: '#666', fontSize: 14, fontWeight: '700' },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
 });
+

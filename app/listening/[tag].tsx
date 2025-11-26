@@ -38,6 +38,12 @@ function PlayingCard({
   const [wordOpacity] = useState(new Animated.Value(0));
   const [pulseAnim] = useState(new Animated.Value(1));
   const loopRef = useRef<any>(null);
+  const wordFontSize = useMemo(() => {
+    const len = (word.en || "").length;
+    if (len <= 8) return 52;
+    const shrink = Math.min(18, (len - 8) * 2);
+    return Math.max(34, 52 - shrink);
+  }, [word.en]);
 
   useEffect(() => {
     if (stage >= 1) {
@@ -102,6 +108,8 @@ function PlayingCard({
             style={[
               styles.wordDisplay,
               {
+                fontSize: wordFontSize,
+                lineHeight: wordFontSize * 1.1,
                 transform: [{ scale: stage >= 4 ? pulseAnim : 1 }],
               },
             ]}
