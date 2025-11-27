@@ -27,6 +27,7 @@ export default function AddWordScreen() {
   const [zh, setZh] = useState("");
   const [exEn, setExEn] = useState("");
   const [exZh, setExZh] = useState("");
+  const [phonetic, setPhonetic] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
 
   const speakWordTwice = async (text: string) => {
@@ -49,6 +50,7 @@ export default function AddWordScreen() {
     setZh("");
     setExEn("");
     setExZh("");
+    setPhonetic("");
   };
 
   const addWord = async () => {
@@ -56,6 +58,7 @@ export default function AddWordScreen() {
     const _zh = zh.trim();
     const _exEn = exEn.trim();
     const _exZh = exZh.trim();
+    const _phonetic = phonetic.trim();
     if (!_en || !_zh) {
       alert.warning(t("explore.fillRequired") || "Please fill in required fields");
       return;
@@ -74,6 +77,7 @@ export default function AddWordScreen() {
         zh: _zh,
         exampleEn: _exEn,
         exampleZh: _exZh,
+        phonetic: _phonetic || undefined,
         status: "unknown",
         createdAt: new Date().toISOString(),
         reviewCount: 0,
@@ -101,7 +105,7 @@ export default function AddWordScreen() {
       setAiLoading(true);
       alert.info("🤖 AI processing...");
 
-      const prev = { en, zh, exEn, exZh };
+      const prev = { en, zh, exEn, exZh, phonetic };
       const res = await aiCompleteWord({ en: onlyEn ? _en : undefined, zh: onlyZh ? _zh : undefined });
 
       const changed: string[] = [];
@@ -113,6 +117,8 @@ export default function AddWordScreen() {
       if (res.exampleEn !== undefined && (res.exampleEn || "") !== prev.exEn) changed.push("exampleEn");
       if (res.exampleZh !== undefined) setExZh(res.exampleZh || "");
       if (res.exampleZh !== undefined && (res.exampleZh || "") !== prev.exZh) changed.push("exampleZh");
+      if (res.phonetic !== undefined) setPhonetic(res.phonetic || "");
+      if (res.phonetic !== undefined && (res.phonetic || "") !== prev.phonetic) changed.push("phonetic");
 
       if (changed.length === 0) {
         alert.warning("AI response received but no fields were updated");
@@ -162,6 +168,14 @@ export default function AddWordScreen() {
             onFocus={() => {
               if (en.trim() && zh.trim()) setZh("");
             }}
+          />
+
+          <Input
+            label="KK Phonetic"
+            placeholder="/ˈæktər/"
+            value={phonetic}
+            onChangeText={setPhonetic}
+            autoCapitalize="none"
           />
 
           <Input

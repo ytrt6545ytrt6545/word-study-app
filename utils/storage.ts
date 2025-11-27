@@ -169,6 +169,7 @@ export type Word = {
   zh: string;
   exampleEn?: string;
   exampleZh?: string;
+  phonetic?: string;
   note?: string;
   status: WordStatus;
   createdAt?: string;
@@ -218,6 +219,7 @@ export async function loadWords(): Promise<Word[]> {
       zh: normalizeRequiredText((w as any).zh),
       exampleEn: normalizeOptionalText<string | undefined>((w as any).exampleEn),
       exampleZh: normalizeOptionalText<string | undefined>((w as any).exampleZh),
+      phonetic: normalizeOptionalText<string | undefined>((w as any).phonetic),
       note: normalizeOptionalText<string | undefined>((w as any).note),
       createdAt: (w as any).createdAt || nowIso,
       reviewCount: typeof (w as any).reviewCount === "number" ? (w as any).reviewCount : 0,

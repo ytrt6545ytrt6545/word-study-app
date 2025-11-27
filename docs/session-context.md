@@ -188,6 +188,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-build-env.ps1
 - 手機 USB 連線，執行 `npx expo run:android --variant debug`，Metro 指向 127.0.0.1:8081，已能熱重載。
 - 首頁功能模組區下方新增文字「這是測試」；首頁建構日期改為固定顯示 `2025/11/26`（`app/(tabs)/index.tsx`，不再讀 env）。
 - 若手機顯示 Waiting for Debugger，關閉系統「等待偵錯」、必要時 `adb uninstall com.bwcyst.chiwordstudy` 後再跑 `npx expo run:android --variant debug`。
+- 避免在 PowerShell 直接用 `py - <<'PY'`、`py -c "..."` 這類含 `<`、花括號或 emoji 的單行命令，因為 shell 會把 `<` 當重導與 cp950 會無法編碼特殊符號，請改寫成 `.py` 腳本（明確寫入 `utf-8`）後再執行，這樣才不會出現不必要的失敗提醒。
 
 ## 2025-11-27 工作紀錄
 - USB 開發端曾出現 Global was not installed / Bundling 卡在 33% 的錯誤，已重置 Metro cache 並重新啟動 dev client，問題已解除（取代先前 Metro 連線失敗紀錄）。

@@ -216,6 +216,9 @@ export default function WordDetail() {
                 <MaterialIcons name="volume-up" size={32} color={listening ? "#ccc" : "#1976d2"} />
             </Pressable>
         </View>
+        {!!word.phonetic && (
+          <Text style={styles.phonetic}>{word.phonetic}</Text>
+        )}
         <TextInput
             style={[styles.input, styles.inputMultiline, { height: zhHeight, marginTop: 8 }]}
             value={zh}
@@ -334,6 +337,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 4,
+  },
+  phonetic: {
+    fontSize: 16,
+    fontStyle: "italic",
+    marginBottom: 8,
+    color: "#0a7ea4",
   },
   title: { 
     fontSize: 34, 

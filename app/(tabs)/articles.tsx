@@ -78,7 +78,7 @@ export default function ArticleLibraryScreen() {
 
   const handleOpen = useCallback(
     (item: Article) => {
-      router.push({ pathname: '/(tabs)/reading', params: { articleId: item.id } });
+      router.push({ pathname: '/reading', params: { articleId: item.id } });
     },
     [router]
   );

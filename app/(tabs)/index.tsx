@@ -102,7 +102,7 @@ export default function Index() {
     ...((Constants.manifestExtra as any) ?? {}),
     ...((Constants.expoConfig as any)?.extra ?? {}),
   };
-  const buildDate = "2025/11/26";
+  const buildDate = "2025/11/27";
   const buildDateLabel = t("index.lastUpdated", { date: buildDate });
 
   return (
@@ -139,7 +139,6 @@ export default function Index() {
             </Pressable>
           ))}
         </View>
-        <Text style={styles.quickNote}>這是測試</Text>
       </ScrollView>
     </View>
   );
@@ -160,11 +159,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.gray[900],
     marginBottom: THEME.spacing.lg,
     marginTop: THEME.spacing.lg,
-  },
-  quickNote: {
-    ...THEME.typography.body,
-    color: THEME.colors.gray[700],
-    marginTop: THEME.spacing.md,
   },
   cardGrid: {
     gap: THEME.spacing.lg,

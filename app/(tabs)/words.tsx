@@ -172,6 +172,11 @@ export default function Words() {
         <Text style={[styles.itemEn, { fontSize: wordFont }]} numberOfLines={1} ellipsizeMode="tail">
           {item.en}
         </Text>
+        {item.phonetic ? (
+          <Text style={styles.itemPhonetic} numberOfLines={1} ellipsizeMode="tail">
+            {item.phonetic}
+          </Text>
+        ) : null}
         <Text style={styles.itemZh}>{item.zh || '—'}</Text>
       </View>
 
@@ -287,6 +292,7 @@ const styles = StyleSheet.create({
   item: { marginHorizontal: 16, padding: 16, backgroundColor: "#fff", borderRadius: 14, borderWidth: 2, borderColor: "#ddd", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
   topArea: { marginBottom: 12 },
   itemEn: { fontSize: 18, fontWeight: "700", color: "#1a1a1a", marginBottom: 4 },
+  itemPhonetic: { fontSize: 14, color: "#0a7ea4", fontStyle: "italic", marginBottom: 4 },
   itemZh: { fontSize: 15, color: "#666", fontWeight: "500" },
   bottomRow: { flexDirection: "row", alignItems: "center", flexWrap: "nowrap", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#f0f0f0" },
   metaGroup: { flexDirection: "row", alignItems: "center", gap: 4 },

@@ -634,12 +634,23 @@ export default function ReadingScreen() {
     const translation = (lookupState?.ai?.zh || '').trim();
     const exampleEn = lookupState?.ai?.exampleEn || '';
     const exampleZh = lookupState?.ai?.exampleZh || '';
+    const phonetic = lookupState?.phonetic;
     const sanitizedTags = dedupeTags(incomingTags);
     const tagSet = new Set(sanitizedTags);
     tagSet.add(REVIEW_TAG);
     const tags = Array.from(tagSet);
     const nowIso = new Date().toISOString();
-    return { en: trimmed, zh: translation, exampleEn, exampleZh, status: 'unknown', createdAt: nowIso, reviewCount: 0, tags };
+    return {
+      en: trimmed,
+      zh: translation,
+      exampleEn,
+      exampleZh,
+      phonetic,
+      status: 'unknown',
+      createdAt: nowIso,
+      reviewCount: 0,
+      tags,
+    };
   };
 
   const handleAddWord = async () => {
